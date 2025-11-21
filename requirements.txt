@@ -1,0 +1,5 @@
+tqdm
+openai
+chromadb
+requests
+python-dotenv
