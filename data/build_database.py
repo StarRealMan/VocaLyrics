@@ -2,49 +2,55 @@
 # -*- coding: utf-8 -*-
 
 """
-从 VocaDB 歌曲 JSON 构建双向量 Chroma 数据库（使用 OpenAI embeddings）：
+从 VocaDB 歌曲 JSON 构建双向量 Qdrant 数据库（使用 OpenAI embeddings）：
 
 1. song-level collection: vocadb_songs
    - 每首歌 1 条向量
-   - document: 标题 + 空行 + 全部歌词
+   - payload.document: 标题 + 空行 + 全部歌词
 
 2. chunk-level collection: vocadb_chunks
    - 每首歌若干条向量
    - 使用 “自然段 + 长度控制” 的 chunk 策略
-   - document: 单个 chunk 文本
+   - payload.document: 单个 chunk 文本
 
-metadata 包含：
+payload / metadata 包含：
    song_id, defaultName, year, primaryCultureCode,
    ratingScore, favoritedTimes, lengthSeconds,
-   producerNames, tagNames, (chunk-level 还有 chunk_index)
+   producerNames, tagNames, (chunk-level 还有 chunk_index, chunk_id)
 
 使用模型：
-   text-embedding-3-small （max 1536 维，多语言，便宜）
+   text-embedding-3-small （1536 维，多语言，便宜）
 
 用法示例：
-   python build_chroma_dual.py \
-      --json-dir ./vocadb_songs \
-      --chroma-dir ./chroma_vdb \
-      --batch-size 64 \
-      --max-songs 0
+   python build_database.py \
+      --json_dir ./vocadb_songs \
+      --qdrant_dir ./qdrant_vdb \
+      --batch_size 64 \
+      --max_songs 0 \
+      --song_level --chunk_level \
 """
 
 import argparse
 import json
 import logging
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from tqdm import tqdm
 
-import chromadb
-from chromadb.config import Settings
 from openai import OpenAI
-from dotenv import load_dotenv
 
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.http import models as rest
+
+from data.client import (
+    init_openai_client,
+    init_qdrant_client_and_collections,
+)
 
 # ------------ 配置区 ------------
+BASE_URL = "https://api.laozhang.ai/v1"
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536
 
@@ -63,85 +69,53 @@ def setup_logger() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build dual Chroma vector DB (song-level + chunk-level) from VocaDB JSON."
+        description="Build dual Qdrant vector DB (song-level + chunk-level) from VocaDB JSON."
     )
     parser.add_argument(
-        "--json-dir",
+        "--json_dir",
         type=str,
         required=True,
         help="VocaDB 歌曲 JSON 文件目录（song_*.json）",
     )
     parser.add_argument(
-        "--chroma-dir",
+        "--qdrant_dir",
         type=str,
         required=True,
-        help="Chroma 持久化目录（会自动创建）",
+        help="Qdrant 持久化目录（会自动创建）",
     )
     parser.add_argument(
-        "--batch-size",
+        "--batch_size",
         type=int,
         default=64,
         help="一次发送给 OpenAI 的文本数量（默认 64）",
     )
     parser.add_argument(
-        "--max-songs",
+        "--max_songs",
         type=int,
         default=0,
         help="最多处理多少首歌（0 表示全部）",
     )
     parser.add_argument(
-        "--song-level",
+        "--min_lines",
+        type=int,
+        default=2,
+        help="chunk-level 最小行数（默认 2 行）",
+    )
+    parser.add_argument(
+        "--song_level",
         action="store_true",
         help="构建 song-level",
     )
     parser.add_argument(
-        "--chunk-level",
+        "--chunk_level",
         action="store_true",
         help="构建 chunk-level",
     )
     return parser.parse_args()
 
 
-def init_openai_client() -> OpenAI:
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("环境变量 OPENAI_API_KEY 未设置。")
-    return OpenAI(api_key=api_key)
-
-def init_chroma_collections(chroma_dir: Path):
-    client = chromadb.PersistentClient(
-        path=str(chroma_dir),
-        settings=Settings(anonymized_telemetry=False),
-    )
-
-    # song-level collection
-    try:
-        song_col = client.get_collection(name=SONG_COLLECTION_NAME)
-        logging.info("使用已有 song-level collection：%s", SONG_COLLECTION_NAME)
-    except Exception:
-        song_col = client.create_collection(
-            name=SONG_COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
-        logging.info("创建新的 song-level collection：%s", SONG_COLLECTION_NAME)
-
-    # chunk-level collection
-    try:
-        chunk_col = client.get_collection(name=CHUNK_COLLECTION_NAME)
-        logging.info("使用已有 chunk-level collection：%s", CHUNK_COLLECTION_NAME)
-    except Exception:
-        chunk_col = client.create_collection(
-            name=CHUNK_COLLECTION_NAME,
-            metadata={"hnsw:space": "cosine"},
-        )
-        logging.info("创建新的 chunk-level collection：%s", CHUNK_COLLECTION_NAME)
-
-    return song_col, chunk_col
-
-
 def chunk_lyrics(
-    lyrics: str, 
+    lyrics: str,
     min_lines: int = 1
 ) -> List[str]:
     """
@@ -185,15 +159,24 @@ def build_common_metadata(song: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(t, dict) and t.get("tagName")
     ]
 
+    artist = song.get("artist") or []
+    artist_names = [
+        a.get("name") for a in artist
+        if isinstance(a, dict) and a.get("name")
+    ]
+
     meta = {
         "song_id": song.get("id"),
         "defaultName": song.get("defaultName"),
         "year": song.get("year"),
+        "month": song.get("month"),
         "primaryCultureCode": song.get("primaryCultureCode"),
         "ratingScore": song.get("ratingScore"),
         "favoritedTimes": song.get("favoritedTimes"),
         "lengthSeconds": song.get("lengthSeconds"),
+        "mainPicture": song.get("mainPicture"),
         "producerNames": song.get("producerNames") or [],
+        "artistNames": artist_names,
         "tagNames": tag_names,
     }
     return meta
@@ -221,26 +204,48 @@ def embed_batch(client: OpenAI, texts: List[str]) -> List[List[float]]:
     return [item.embedding for item in resp.data]
 
 
-def flush_batch_to_chroma(
-    client: OpenAI,
-    collection,
-    batch_ids: List[str],
+def flush_batch_to_qdrant(
+    openai_client: OpenAI,
+    qdrant_client: QdrantClient,
+    collection_name: str,
+    batch_ids: List[int],
     batch_docs: List[str],
     batch_metas: List[Dict[str, Any]],
     label: str,
 ) -> int:
-    """将当前 batch 写入指定的 Chroma collection，返回写入数量。"""
+    """
+    将当前 batch 写入指定的 Qdrant collection，返回写入数量。
+    payload 中会包含：
+      - 原来的 metadata
+      - "document": 文本内容
+
+    Qdrant 的 point id 使用自增整数（int），业务 ID 放在 payload 里：
+      - song_id, chunk_index, chunk_id 等
+    """
     if not batch_ids:
         return 0
 
     try:
-        embeddings = embed_batch(client, batch_docs)
-        collection.add(
-            ids=batch_ids,
-            documents=batch_docs,
-            metadatas=batch_metas,
-            embeddings=embeddings,
+        embeddings = embed_batch(openai_client, batch_docs)
+        points: List[PointStruct] = []
+
+        for _id, doc, meta, vec in zip(batch_ids, batch_docs, batch_metas, embeddings):
+            payload = dict(meta)
+            if label == "chunk":
+                payload["lyrics"] = doc
+            points.append(
+                PointStruct(
+                    id=_id,       # int，自增
+                    vector=vec,
+                    payload=payload,
+                )
+            )
+
+        qdrant_client.upsert(
+            collection_name=collection_name,
+            points=points,
         )
+
         logging.info(
             "[%s] 写入 batch：%d 条（示例 id: %s）",
             label, len(batch_ids), batch_ids[0]
@@ -251,12 +256,45 @@ def flush_batch_to_chroma(
         return 0
 
 
+def ensure_payload_indexes(client: QdrantClient, collection_name: str) -> None:
+    """
+    在指定 collection 上创建需要的 payload 索引。
+    已存在的索引会跳过，不会报错。
+    """
+
+    field_schema_map = {
+        "year": rest.PayloadSchemaType.INTEGER,
+        "month": rest.PayloadSchemaType.INTEGER,
+        "primaryCultureCode": rest.PayloadSchemaType.KEYWORD,
+        "ratingScore": rest.PayloadSchemaType.INTEGER,
+        "favoritedTimes": rest.PayloadSchemaType.INTEGER,
+        "lengthSeconds": rest.PayloadSchemaType.INTEGER,
+        "producerNames": rest.PayloadSchemaType.KEYWORD,
+        "artistNames": rest.PayloadSchemaType.KEYWORD,
+        "tagNames": rest.PayloadSchemaType.KEYWORD,
+    }
+
+    info = client.get_collection(collection_name)
+    existing_schema = info.payload_schema or {}
+
+    for field_name, schema_type in field_schema_map.items():
+        if field_name in existing_schema:
+            continue
+
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name=field_name,
+            field_schema=schema_type,
+        )
+        print(f"[Qdrant] Created payload index on '{field_name}' ({schema_type})")
+
+
 def main():
     setup_logger()
     args = parse_args()
 
     json_dir = Path(args.json_dir)
-    chroma_dir = Path(args.chroma_dir)
+    qdrant_dir = Path(args.qdrant_dir)
 
     if not json_dir.exists():
         raise RuntimeError(f"json-dir 不存在: {json_dir}")
@@ -264,24 +302,33 @@ def main():
     if not args.song_level and not args.chunk_level:
         raise RuntimeError("必须至少启用 song-level 或 chunk-level 之一。")
 
-    client = init_openai_client()
-    song_col, chunk_col = init_chroma_collections(chroma_dir)
+    openai_client = init_openai_client(BASE_URL)
+    qdrant_client = init_qdrant_client_and_collections(
+        qdrant_dir,
+        EMBEDDING_DIM,
+        SONG_COLLECTION_NAME,
+        CHUNK_COLLECTION_NAME
+    )
 
     song_files = iter_song_files(json_dir, args.max_songs)
     logging.info("即将处理 JSON 文件数：%d", len(song_files))
 
     # song-level 批缓存
-    song_ids: List[str] = []
+    song_ids: List[int] = []
     song_docs: List[str] = []
     song_metas: List[Dict[str, Any]] = []
 
     # chunk-level 批缓存
-    chunk_ids: List[str] = []
+    chunk_ids: List[int] = []
     chunk_docs: List[str] = []
     chunk_metas: List[Dict[str, Any]] = []
 
     total_song_added = 0
     total_chunk_added = 0
+
+    # 为 Qdrant 的 point id 准备自增计数器（各 collection 独立即可）
+    song_point_id = 1
+    chunk_point_id = 1
 
     for path in tqdm(song_files, desc="Building embeddings"):
         song = load_song(path)
@@ -294,56 +341,84 @@ def main():
         song_id = meta_common.get("song_id")
         if song_id is None:
             continue
-        song_id_str = str(song_id)
 
         # ---------- song-level ----------
         if args.song_level:
             doc_song = build_song_document(song)
             if doc_song.strip():
-                song_ids.append(song_id_str)
+                # Qdrant 的 point id 用自增整数
+                song_ids.append(song_point_id)
                 song_docs.append(doc_song)
                 song_metas.append(meta_common)
+                song_point_id += 1
 
         # ---------- chunk-level ----------
         if args.chunk_level:
             chunks = chunk_lyrics(
-                lyrics=str(lyrics)
+                lyrics=str(lyrics),
+                min_lines=args.min_lines
             )
             for idx, ch_text in enumerate(chunks):
                 if not ch_text.strip():
                     continue
-                chunk_id = f"{song_id_str}:{idx}"
+
                 meta_chunk = dict(meta_common)
                 meta_chunk["chunk_index"] = idx
-                chunk_ids.append(chunk_id)
+
+                chunk_ids.append(chunk_point_id)
                 chunk_docs.append(ch_text)
                 chunk_metas.append(meta_chunk)
+                chunk_point_id += 1
 
         # 批量写入控制
         if args.song_level and len(song_ids) >= args.batch_size:
-            added = flush_batch_to_chroma(
-                client, song_col, song_ids, song_docs, song_metas, label="song"
+            added = flush_batch_to_qdrant(
+                openai_client,
+                qdrant_client,
+                SONG_COLLECTION_NAME,
+                song_ids,
+                song_docs,
+                song_metas,
+                label="song",
             )
             total_song_added += added
             song_ids, song_docs, song_metas = [], [], []
 
         if args.chunk_level and len(chunk_ids) >= args.batch_size:
-            added = flush_batch_to_chroma(
-                client, chunk_col, chunk_ids, chunk_docs, chunk_metas, label="chunk"
+            added = flush_batch_to_qdrant(
+                openai_client,
+                qdrant_client,
+                CHUNK_COLLECTION_NAME,
+                chunk_ids,
+                chunk_docs,
+                chunk_metas,
+                label="chunk",
             )
             total_chunk_added += added
             chunk_ids, chunk_docs, chunk_metas = [], [], []
 
     # 处理尾巴
     if args.song_level and song_ids:
-        added = flush_batch_to_chroma(
-            client, song_col, song_ids, song_docs, song_metas, label="song-final"
+        added = flush_batch_to_qdrant(
+            openai_client,
+            qdrant_client,
+            SONG_COLLECTION_NAME,
+            song_ids,
+            song_docs,
+            song_metas,
+            label="song-final",
         )
         total_song_added += added
 
     if args.chunk_level and chunk_ids:
-        added = flush_batch_to_chroma(
-            client, chunk_col, chunk_ids, chunk_docs, chunk_metas, label="chunk-final"
+        added = flush_batch_to_qdrant(
+            openai_client,
+            qdrant_client,
+            CHUNK_COLLECTION_NAME,
+            chunk_ids,
+            chunk_docs,
+            chunk_metas,
+            label="chunk-final",
         )
         total_chunk_added += added
 
@@ -351,6 +426,17 @@ def main():
         "构建完成：song-level 向量条目=%d, chunk-level 向量条目=%d",
         total_song_added, total_chunk_added
     )
+
+    ensure_payload_indexes(
+        qdrant_client,
+        SONG_COLLECTION_NAME
+    )
+    ensure_payload_indexes(
+        qdrant_client,
+        CHUNK_COLLECTION_NAME
+    )
+
+    logging.info("已为 collections 创建必要的 payload 索引。")
 
 
 if __name__ == "__main__":
