@@ -102,6 +102,11 @@ def parse_args() -> argparse.Namespace:
         help="chunk-level 最小行数（默认 2 行）",
     )
     parser.add_argument(
+        "--on_disk",
+        action="store_true",
+        help="将向量存储在磁盘上（默认不存储）",
+    )
+    parser.add_argument(
         "--song_level",
         action="store_true",
         help="构建 song-level",
@@ -307,7 +312,8 @@ def main():
         qdrant_dir,
         EMBEDDING_DIM,
         SONG_COLLECTION_NAME,
-        CHUNK_COLLECTION_NAME
+        CHUNK_COLLECTION_NAME,
+        on_disk=args.on_disk,
     )
 
     song_files = iter_song_files(json_dir, args.max_songs)

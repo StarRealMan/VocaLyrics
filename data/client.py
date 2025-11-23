@@ -6,7 +6,14 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import (
+    Distance,
+    VectorParams,
+    HnswConfigDiff,
+    OptimizersConfigDiff,
+    PayloadSchemaType,
+    PayloadIndexParams,
+)
 
 SONG_COLLECTION_NAME = "vocadb_songs"
 CHUNK_COLLECTION_NAME = "vocadb_chunks"
@@ -26,7 +33,8 @@ def init_qdrant_client_and_collections(
         qdrant_dir: Path,
         embedding_dim: int,
         song_collection_name: str,
-        chunk_collection_name: str
+        chunk_collection_name: str,
+        on_disk: bool = False,
     ) -> QdrantClient:
     """
     初始化本地嵌入式 Qdrant，并确保 song-level 和 chunk-level 两个 collection 存在。
@@ -44,7 +52,23 @@ def init_qdrant_client_and_collections(
                 vectors_config=VectorParams(
                     size=embedding_dim,
                     distance=Distance.COSINE,
+                    on_disk=on_disk,
                 ),
+
+                hnsw_config=HnswConfigDiff(
+                    on_disk=True,          # ⬅️ 启用 HNSW 索引 on-disk
+                    m=16,                  # ⬅️ 降低内存峰值（默认 16~64）
+                    ef_construct=64,       # ⬅️ 构建阶段内存敏感建议用 64 或更低
+                ),
+
+                # 优化器配置：控制 segment 大小 & 内存阈值，避免构建时一次性太大
+                optimizers_config=OptimizersConfigDiff(
+                    max_segment_size=200000,   # 控制 segment 大小，避免一次建超大索引
+                    memmap_threshold=10000,    # 使更多数据提前走 mmap，降低 RAM 占用
+                ),
+
+                on_disk_payload=True,  # ⬅️ payload 也用 on-disk
+            )
             )
             logging.info("创建新的 collection：%s", name)
 
