@@ -41,8 +41,7 @@ from tqdm import tqdm
 from openai import OpenAI
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
-from qdrant_client.http import models as rest
+from qdrant_client.models import PointStruct
 
 from data.client import (
     init_openai_client,
@@ -50,7 +49,6 @@ from data.client import (
 )
 
 # ------------ 配置区 ------------
-BASE_URL = "https://api.laozhang.ai/v1"
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536
 
@@ -81,7 +79,7 @@ def parse_args() -> argparse.Namespace:
         "--qdrant_dir",
         type=str,
         required=True,
-        help="Qdrant 持久化目录（会自动创建）",
+        help="Qdrant 持久化目录",
     )
     parser.add_argument(
         "--batch_size",
@@ -164,10 +162,10 @@ def build_common_metadata(song: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(t, dict) and t.get("tagName")
     ]
 
-    artist = song.get("artist") or []
-    artist_names = [
-        a.get("name") for a in artist
-        if isinstance(a, dict) and a.get("name")
+    artists = song.get("artists") or []
+    vsinger_names = [
+        a.get("name") for a in artists
+        if isinstance(a, dict) and a.get("name") and a.get("role") and a.get("role") == "Vocalist"
     ]
 
     meta = {
@@ -179,9 +177,9 @@ def build_common_metadata(song: Dict[str, Any]) -> Dict[str, Any]:
         "ratingScore": song.get("ratingScore"),
         "favoritedTimes": song.get("favoritedTimes"),
         "lengthSeconds": song.get("lengthSeconds"),
-        "mainPicture": song.get("mainPicture"),
+        "mainPicture": song.get("mainPictureUrlOriginal"),
         "producerNames": song.get("producerNames") or [],
-        "artistNames": artist_names,
+        "vsingerNames": vsinger_names,
         "tagNames": tag_names,
     }
     return meta
@@ -261,45 +259,11 @@ def flush_batch_to_qdrant(
         return 0
 
 
-def ensure_payload_indexes(client: QdrantClient, collection_name: str) -> None:
-    """
-    在指定 collection 上创建需要的 payload 索引。
-    已存在的索引会跳过，不会报错。
-    """
-
-    field_schema_map = {
-        "year": rest.PayloadSchemaType.INTEGER,
-        "month": rest.PayloadSchemaType.INTEGER,
-        "primaryCultureCode": rest.PayloadSchemaType.KEYWORD,
-        "ratingScore": rest.PayloadSchemaType.INTEGER,
-        "favoritedTimes": rest.PayloadSchemaType.INTEGER,
-        "lengthSeconds": rest.PayloadSchemaType.INTEGER,
-        "producerNames": rest.PayloadSchemaType.KEYWORD,
-        "artistNames": rest.PayloadSchemaType.KEYWORD,
-        "tagNames": rest.PayloadSchemaType.KEYWORD,
-    }
-
-    info = client.get_collection(collection_name)
-    existing_schema = info.payload_schema or {}
-
-    for field_name, schema_type in field_schema_map.items():
-        if field_name in existing_schema:
-            continue
-
-        client.create_payload_index(
-            collection_name=collection_name,
-            field_name=field_name,
-            field_schema=schema_type,
-        )
-        print(f"[Qdrant] Created payload index on '{field_name}' ({schema_type})")
-
-
 def main():
     setup_logger()
     args = parse_args()
 
     json_dir = Path(args.json_dir)
-    qdrant_dir = Path(args.qdrant_dir)
 
     if not json_dir.exists():
         raise RuntimeError(f"json-dir 不存在: {json_dir}")
@@ -307,12 +271,21 @@ def main():
     if not args.song_level and not args.chunk_level:
         raise RuntimeError("必须至少启用 song-level 或 chunk-level 之一。")
 
-    openai_client = init_openai_client(BASE_URL)
+    if args.song_level:
+        song_collection_name = SONG_COLLECTION_NAME
+    else:
+        song_collection_name = None
+    if args.chunk_level:
+        chunk_collection_name = CHUNK_COLLECTION_NAME
+    else:
+        chunk_collection_name = None
+
+    openai_client = init_openai_client()
     qdrant_client = init_qdrant_client_and_collections(
-        qdrant_dir,
+        args.qdrant_dir,
         EMBEDDING_DIM,
-        SONG_COLLECTION_NAME,
-        CHUNK_COLLECTION_NAME,
+        song_collection_name=song_collection_name,
+        chunk_collection_name=chunk_collection_name,
         on_disk=args.on_disk,
     )
 
@@ -432,17 +405,6 @@ def main():
         "构建完成：song-level 向量条目=%d, chunk-level 向量条目=%d",
         total_song_added, total_chunk_added
     )
-
-    ensure_payload_indexes(
-        qdrant_client,
-        SONG_COLLECTION_NAME
-    )
-    ensure_payload_indexes(
-        qdrant_client,
-        CHUNK_COLLECTION_NAME
-    )
-
-    logging.info("已为 collections 创建必要的 payload 索引。")
 
 
 if __name__ == "__main__":
