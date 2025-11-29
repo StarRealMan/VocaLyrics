@@ -76,12 +76,6 @@ def parse_args() -> argparse.Namespace:
         help="VocaDB 歌曲 JSON 文件目录（song_*.json）",
     )
     parser.add_argument(
-        "--qdrant_dir",
-        type=str,
-        required=True,
-        help="Qdrant 持久化目录",
-    )
-    parser.add_argument(
         "--batch_size",
         type=int,
         default=64,
@@ -282,10 +276,10 @@ def main():
 
     openai_client = init_openai_client()
     qdrant_client = init_qdrant_client_and_collections(
-        args.qdrant_dir,
-        EMBEDDING_DIM,
+        embedding_dim=EMBEDDING_DIM,
         song_collection_name=song_collection_name,
         chunk_collection_name=chunk_collection_name,
+        create_payload_indexes=True,
         on_disk=args.on_disk,
     )
 

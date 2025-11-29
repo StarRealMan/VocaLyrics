@@ -73,7 +73,7 @@ def _add_match_all(
         must_list.append(
             FieldCondition(
                 key=key,
-                match=MatchAny(any=[v]),
+                match=MatchValue(value=v),
             )
         )
 
@@ -93,17 +93,66 @@ def _add_match_value(
         )
     )
 
+def _add_range(
+    must_list: List[FieldCondition],
+    key: str,
+    min_value: Optional[Any],
+    max_value: Optional[Any],
+) -> None:
+    """辅助函数：给 must_list 加一个 Range 条件（范围）。"""
+    if min_value is None and max_value is None:
+        return
+    r: Dict[str, Any] = {}
+    if min_value is not None:
+        r["gte"] = min_value
+    if max_value is not None:
+        r["lte"] = max_value
+    must_list.append(
+        FieldCondition(
+            key=key,
+            range=Range(**r),
+        )
+    )
+
+def _add_must(
+    must_list: List[FieldCondition],
+    key: str,
+    count_key: int,
+    values: Optional[Sequence[Any]],
+) -> None:
+    """辅助函数：给 must_list 加一个“list必须全等”的条件。"""
+    if not values or count_key is None:
+        return
+    for v in values:
+        must_list.append(
+            FieldCondition(
+                key=key,
+                match=MatchValue(value=v),
+            )
+        )
+    must_list.append(
+        FieldCondition(
+            key=count_key,
+            match=MatchValue(value=len(values)),
+        )
+    )
 
 def build_payload_filter(
-    # artist 相关
-    artists_any: Optional[Sequence[str]] = None,
-    artists_all: Optional[Sequence[str]] = None,
-    # tag 相关
-    tags_any: Optional[Sequence[str]] = None,
-    tags_all: Optional[Sequence[str]] = None,
     # producer 相关
     producers_any: Optional[Sequence[str]] = None,
     producers_all: Optional[Sequence[str]] = None,
+    producers_must: Optional[Sequence[str]] = None,
+    producers_min: Optional[int] = None,
+    producers_max: Optional[int] = None,
+    # vsinger 相关
+    vsingers_any: Optional[Sequence[str]] = None,
+    vsingers_all: Optional[Sequence[str]] = None,
+    vsingers_must: Optional[Sequence[str]] = None,
+    vsingers_min: Optional[int] = None,
+    vsingers_max: Optional[int] = None,
+    # tag 相关
+    tags_any: Optional[Sequence[str]] = None,
+    tags_all: Optional[Sequence[str]] = None,
     # 年份 / 月份
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
@@ -128,90 +177,39 @@ def build_payload_filter(
     """
     must: List[FieldCondition] = []
 
-    # artist: list[string]
-    _add_match_any(must, "artistNames", artists_any)
-    _add_match_all(must, "artistNames", artists_all)
+    # producerNames: list[string]
+    _add_match_any(must, "producerNames", producers_any)
+    _add_match_all(must, "producerNames", producers_all)
+    _add_range(must, "producerNum", producers_min, producers_max)
+    _add_must(must, "producerNames", "producerNum", producers_must)
+
+    # vsinger: list[string]
+    _add_match_any(must, "vsingerNames", vsingers_any)
+    _add_match_all(must, "vsingerNames", vsingers_all)
+    _add_range(must, "vsingerNum", vsingers_min, vsingers_max)
+    _add_must(must, "vsingerNames", "vsingerNum", vsingers_must)
 
     # tagNames: list[string]
     _add_match_any(must, "tagNames", tags_any)
     _add_match_all(must, "tagNames", tags_all)
 
-    # producerNames: list[string]
-    _add_match_any(must, "producerNames", producers_any)
-    _add_match_all(must, "producerNames", producers_all)
-
     # cultureCode: string (ja, cn, en, etc.)
     _add_match_value(must, "primaryCultureCode", culture)
 
-    # 年份范围
-    if year_min is not None or year_max is not None:
-        r: Dict[str, Any] = {}
-        if year_min is not None:
-            r["gte"] = year_min
-        if year_max is not None:
-            r["lte"] = year_max
-        must.append(
-            FieldCondition(
-                key="year",
-                range=Range(**r),
-            )
-        )
+    # year range
+    _add_range(must, "year", year_min, year_max)
 
-    # 月份范围
-    if month_min is not None or month_max is not None:
-        r: Dict[str, Any] = {}
-        if month_min is not None:
-            r["gte"] = month_min
-        if month_max is not None:
-            r["lte"] = month_max
-        must.append(
-            FieldCondition(
-                key="month",
-                range=Range(**r),
-            )
-        )
-    
-    # ratingScore 范围
-    if month_min is not None or month_max is not None:
-        r: Dict[str, Any] = {}
-        if month_min is not None:
-            r["gte"] = rating_min
-        if month_max is not None:
-            r["lte"] = rating_max
-        must.append(
-            FieldCondition(
-                key="ratingScore",
-                range=Range(**r),
-            )
-        )
+    # month range
+    _add_range(must, "month", month_min, month_max)
 
-    # favoriteCount 范围
-    if favorite_min is not None or favorite_max is not None:
-        r: Dict[str, Any] = {}
-        if favorite_min is not None:
-            r["gte"] = favorite_min
-        if favorite_max is not None:
-            r["lte"] = favorite_max
-        must.append(
-            FieldCondition(
-                key="favoriteCount",
-                range=Range(**r),
-            )
-        )
-    
-    # length 范围
-    if length_min is not None or length_max is not None:
-        r: Dict[str, Any] = {}
-        if length_min is not None:
-            r["gte"] = length_min
-        if length_max is not None:
-            r["lte"] = length_max
-        must.append(
-            FieldCondition(
-                key="length",
-                range=Range(**r),
-            )
-        )
+    # ratingScore range
+    _add_range(must, "ratingScore", rating_min, rating_max)
+
+    # favoritedTimes range
+    _add_range(must, "favoritedTimes", favorite_min, favorite_max)
+
+    # lengthSeconds range
+    _add_range(must, "lengthSeconds", length_min, length_max)
 
     if not must:
         return None
@@ -226,12 +224,18 @@ def query(
     openai_client: Optional[OpenAI] = None,
     top_k: int = 10,
     query_text: Optional[str] = None,
-    artists_any: Optional[Sequence[str]] = None,
-    artists_all: Optional[Sequence[str]] = None,
-    tags_any: Optional[Sequence[str]] = None,
-    tags_all: Optional[Sequence[str]] = None,
     producers_any: Optional[Sequence[str]] = None,
     producers_all: Optional[Sequence[str]] = None,
+    producers_must: Optional[Sequence[str]] = None,
+    producers_min: Optional[int] = None,
+    producers_max: Optional[int] = None,
+    vsingers_any: Optional[Sequence[str]] = None,
+    vsingers_all: Optional[Sequence[str]] = None,
+    vsingers_must: Optional[Sequence[str]] = None,
+    vsingers_min: Optional[int] = None,
+    vsingers_max: Optional[int] = None,
+    tags_any: Optional[Sequence[str]] = None,
+    tags_all: Optional[Sequence[str]] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
     month_min: Optional[int] = None,
@@ -257,12 +261,18 @@ def query(
 
     # 构建 Filter
     qfilter = build_payload_filter(
-        artists_any=artists_any,
-        artists_all=artists_all,
-        tags_any=tags_any,
-        tags_all=tags_all,
         producers_any=producers_any,
         producers_all=producers_all,
+        producers_must=producers_must,
+        producers_min=producers_min,
+        producers_max=producers_max,
+        vsingers_any=vsingers_any,
+        vsingers_all=vsingers_all,
+        vsingers_must=vsingers_must,
+        vsingers_min=vsingers_min,
+        vsingers_max=vsingers_max,
+        tags_any=tags_any,
+        tags_all=tags_all,
         culture=culture,
         year_min=year_min,
         year_max=year_max,

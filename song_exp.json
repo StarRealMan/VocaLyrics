@@ -1,0 +1,60 @@
+{
+  "id": 100002,
+  "defaultName": "Happy Birthday",
+  "year": 2015,
+  "month": 8,
+  "ratingScore": 17,
+  "favoritedTimes": 3,
+  "lengthSeconds": 282,
+  "rank": 488700,
+  "mainPictureUrlOriginal": "https://i1.ytimg.com/vi/NEij151oJNM/hqdefault.jpg",
+  "artists": [
+    {
+      "id": 1,
+      "name": "初音ミク",
+      "role": "Vocalist"
+    },
+    {
+      "id": 969,
+      "name": "空海月",
+      "role": "Producer"
+    },
+    {
+      "id": 23671,
+      "name": "駒鳥うい",
+      "role": "Illustrator"
+    }
+  ],
+  "producerNames": [
+    "空海月"
+  ],
+  "tags": [
+    {
+      "tagId": 81,
+      "tagName": "cute",
+      "count": 1
+    },
+    {
+      "tagId": 160,
+      "tagName": "free",
+      "count": 1
+    },
+    {
+      "tagId": 1698,
+      "tagName": "technopop",
+      "count": 1
+    },
+    {
+      "tagId": 2987,
+      "tagName": "birthday",
+      "count": 3
+    },
+    {
+      "tagId": 4568,
+      "tagName": "meta",
+      "count": 1
+    }
+  ],
+  "primaryCultureCode": "ja",
+  "originalLyrics": "朝早い時間　ふと思いついたの \n君へのプレゼントを用意しようと \n始まりはいつも一本のピアノで \n君への思いが音をふくらませていくよ\n\nカラフルによみがえる君との思い出に \n自然と笑顔でいられるよ\n\n君はいつも人気者で　愛にうもれて見えなくなって \n私なんかじゃふれられないと　そう思う日も確かあった \nいつの間にかそばにいて　君のために歌を作って \nこんなに長く付き合っていたってドキドキが止まらないのよ\n\nちょっとはずませてく指先のリズムで \n悩んでた歌詞だってひらめいていくよ\n\n君が歌う姿を想像するだけで \n自然と言葉が決まってくよ\n\n君のことを知らなくて　すれ違いの連続にあって \n私なんかじゃ伝えられない　そう思う日も確かあった \nいつの間にかそばにいて　君のために言葉をつづって \n君に会えた奇跡で今もずっとワクワクが止まらないのよ\n\nどんなにつらい時だって　君がいたから素直になれて \n愛が言葉を運んでくれて　少しだけ前が見づらいよ \nいつの間にかそばにいて　たくさんの思いであふれて \n心を込めて君に言いたいんだ　 Happy Birthday!!　ちゃんと届くよね"
+}

@@ -21,7 +21,9 @@ FIELD_SCHEMA_MAP = {
     "favoritedTimes": rest.PayloadSchemaType.INTEGER,
     "lengthSeconds": rest.PayloadSchemaType.INTEGER,
     "producerNames": rest.PayloadSchemaType.KEYWORD,
+    "producerNum": rest.PayloadSchemaType.INTEGER,
     "vsingerNames": rest.PayloadSchemaType.KEYWORD,
+    "vsingerNum": rest.PayloadSchemaType.INTEGER,
     "tagNames": rest.PayloadSchemaType.KEYWORD,
 }
 
@@ -39,16 +41,20 @@ def init_openai_client() -> OpenAI:
 
 
 def init_qdrant_client_and_collections(
-        qdrant_dir: Union[str, Path],
         embedding_dim: int,
-        song_collection_name: str,
-        chunk_collection_name: str,
+        song_collection_name: str = None,
+        chunk_collection_name: str = None,
+        create_payload_indexes: bool = False,
         on_disk: bool = False,
     ) -> QdrantClient:
     """
     初始化Qdrant，并确保 song-level 和 chunk-level 两个 collection 存在。
     """
+
+    assert song_collection_name or chunk_collection_name, \
+        "Need at least one of song_collection_name or chunk_collection_name."
     load_dotenv()
+    qdrant_dir = os.getenv("QDRANT_URL", qdrant_dir)
     api_key = os.getenv("QDRANT__SERVICE__API_KEY")
     if qdrant_dir.startswith("http://") or qdrant_dir.startswith("https://"):
         client = QdrantClient(url=qdrant_dir, api_key=api_key)
@@ -75,44 +81,40 @@ def init_qdrant_client_and_collections(
             )
             logging.info("创建新的 collection：%s", name)
     
-    def ensure_payload_indexes(
-        client: QdrantClient,
-        collection_name: str,
-        field_schema_map: dict[str, rest.PayloadSchemaType],
-    ) -> None:
+    def ensure_payload_indexes(name: str, field_schema_map: dict[str, rest.PayloadSchemaType]) -> None:
         for field_name, schema in field_schema_map.items():
             try:
                 client.create_payload_index(
-                    collection_name=collection_name,
+                    collection_name=name,
                     field_name=field_name,
                     field_schema=schema,
                 )
                 logging.info(
                     "为 collection %s 创建字段 %s 的索引。",
-                    collection_name,
+                    name,
                     field_name,
                 )
             except Exception as e:
                 logging.warning(
                     "无法为 collection %s 创建字段 %s 的索引，可能已存在。错误信息：%s",
-                    collection_name,
+                    name,
                     field_name,
                     str(e),
                 )
 
     if song_collection_name:
         ensure_collection(song_collection_name)
-        ensure_payload_indexes(
-            client,
-            song_collection_name,
-            FIELD_SCHEMA_MAP,
-        )
+        if create_payload_indexes:
+            ensure_payload_indexes(
+                song_collection_name,
+                FIELD_SCHEMA_MAP,
+            )
     if chunk_collection_name:
         ensure_collection(chunk_collection_name)
-        ensure_payload_indexes(
-            client,
-            chunk_collection_name,
-            FIELD_SCHEMA_MAP,
-        )
+        if create_payload_indexes:
+            ensure_payload_indexes(
+                chunk_collection_name,
+                FIELD_SCHEMA_MAP,
+            )
 
     return client
