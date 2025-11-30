@@ -43,7 +43,7 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
-from data.client import (
+from ..utils.client import (
     init_openai_client,
     init_qdrant_client_and_collections,
 )

@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """Utility script to debug Qdrant queries defined in `data.query`."""
-
-from __future__ import annotations
 
 import argparse
 import json
 import logging
-import os
 from typing import Any, Sequence
 
-from data.client import (
+from utils.client import (
+	SONG_COLLECTION_NAME,
 	CHUNK_COLLECTION_NAME,
 	init_openai_client,
 	init_qdrant_client_and_collections,
 )
-from data.query import EMBEDDING_DIM, query
+from utils.query import EMBEDDING_DIM, query
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,6 +37,11 @@ def parse_args() -> argparse.Namespace:
 		"--pure_payload",
 		action="store_true",
 		help="Skip embeddings and only use structured payload filtering.",
+	)
+	parser.add_argument(
+		"--query_chunks",
+		action="store_true",
+		help="Query chunk-level collection.",
 	)
 	parser.add_argument(
 		"--producers_any",
@@ -188,12 +192,17 @@ def main() -> None:
 	qdrant_client = init_qdrant_client_and_collections(
 		embedding_dim=EMBEDDING_DIM,
 		chunk_collection_name=CHUNK_COLLECTION_NAME,
-		create_payload_indexes=True,
+		song_collection_name=SONG_COLLECTION_NAME,
 	)
 
 	openai_client = None
 	if args.query_text and not args.pure_payload:
 		openai_client = init_openai_client()
+
+	if args.query_chunks:
+		collection = CHUNK_COLLECTION_NAME
+	else:
+		collection = SONG_COLLECTION_NAME
 
 	results = query(
 		qdrant_client=qdrant_client,
@@ -220,7 +229,7 @@ def main() -> None:
 		length_min=args.length_min,
 		length_max=args.length_max,
 		pure_payload=args.pure_payload,
-		collection=CHUNK_COLLECTION_NAME,
+		collection=collection,
 	)
 
 	if not results:

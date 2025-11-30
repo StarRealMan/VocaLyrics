@@ -54,7 +54,7 @@ def init_qdrant_client_and_collections(
     assert song_collection_name or chunk_collection_name, \
         "Need at least one of song_collection_name or chunk_collection_name."
     load_dotenv()
-    qdrant_dir = os.getenv("QDRANT_URL", qdrant_dir)
+    qdrant_dir = os.getenv("QDRANT_URL")
     api_key = os.getenv("QDRANT__SERVICE__API_KEY")
     if qdrant_dir.startswith("http://") or qdrant_dir.startswith("https://"):
         client = QdrantClient(url=qdrant_dir, api_key=api_key)

@@ -138,6 +138,7 @@ def _add_must(
     )
 
 def build_payload_filter(
+    name : Optional[str] = None,
     # producer 相关
     producers_any: Optional[Sequence[str]] = None,
     producers_all: Optional[Sequence[str]] = None,
@@ -176,6 +177,9 @@ def build_payload_filter(
     所有条件都是 AND 关系（must），其中某些内部是 OR（如 *any）。
     """
     must: List[FieldCondition] = []
+
+    # name: string
+    _add_match_value(must, "defaultName", name)
 
     # producerNames: list[string]
     _add_match_any(must, "producerNames", producers_any)
@@ -224,6 +228,7 @@ def query(
     openai_client: Optional[OpenAI] = None,
     top_k: int = 10,
     query_text: Optional[str] = None,
+    name: Optional[str] = None,
     producers_any: Optional[Sequence[str]] = None,
     producers_all: Optional[Sequence[str]] = None,
     producers_must: Optional[Sequence[str]] = None,
@@ -261,6 +266,7 @@ def query(
 
     # 构建 Filter
     qfilter = build_payload_filter(
+        name = name,
         producers_any=producers_any,
         producers_all=producers_all,
         producers_must=producers_must,

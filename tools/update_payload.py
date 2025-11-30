@@ -1,14 +1,11 @@
-from data.client import	init_qdrant_client_and_collections
-from data.query import EMBEDDING_DIM
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Utility script to update payload counts in Qdrant collection."""
 
-collection_name = "vocadb_chunks"
-client = init_qdrant_client_and_collections(
-    embedding_dim=EMBEDDING_DIM,
-    chunk_collection_name=collection_name,
-    create_payload_indexes=True
-)
+from utils.client import	init_qdrant_client_and_collections
+from utils.query import EMBEDDING_DIM
 
-def update_payload_counts():
+def update_payload_counts(client, collection_name):
     page_size = 1000
     offset = 0 
 
@@ -27,8 +24,6 @@ def update_payload_counts():
             break
 
         for point in points:
-            payload = point.payload or {}
-
             client.set_payload(
                 collection_name=collection_name,
                 payload={
@@ -48,4 +43,11 @@ def update_payload_counts():
 
 
 if __name__ == "__main__":
-    update_payload_counts()
+    collection_name = "vocadb_chunks"
+    client = init_qdrant_client_and_collections(
+        embedding_dim=EMBEDDING_DIM,
+        chunk_collection_name=collection_name,
+        create_payload_indexes=True
+    )
+
+    update_payload_counts(client, collection_name)

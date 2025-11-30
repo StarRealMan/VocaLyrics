@@ -3,3 +3,4 @@ openai
 qdrant-client
 requests
 python-dotenv
+mido
