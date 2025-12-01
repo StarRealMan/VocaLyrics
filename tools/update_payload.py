@@ -2,10 +2,13 @@
 # -*- coding: utf-8 -*-
 """Utility script to update payload counts in Qdrant collection."""
 
+import os
+import json
 from utils.client import	init_qdrant_client_and_collections
 from utils.query import EMBEDDING_DIM
 
-def update_payload_counts(client, collection_name):
+
+def update_payload_counts(client, collection_name, json_base):
     page_size = 1000
     offset = 0 
 
@@ -24,10 +27,15 @@ def update_payload_counts(client, collection_name):
             break
 
         for point in points:
+            payload = point.payload or {}
+            song_id = payload.get("song_id")
+            with open(os.path.join(json_base, f"song_{song_id}.json"), "r", encoding="utf-8") as json_file:
+                json_data = json.load(json_file)
+            
             client.set_payload(
                 collection_name=collection_name,
                 payload={
-                    # update payload
+                    "lyrics": json_data["originalLyrics"],
                 },
                 points=[point.id],
             )
@@ -43,11 +51,12 @@ def update_payload_counts(client, collection_name):
 
 
 if __name__ == "__main__":
-    collection_name = "vocadb_chunks"
+    collection_name = "vocadb_songs"
+    json_base = "/root/Data/vocadb_raw_json/"
     client = init_qdrant_client_and_collections(
         embedding_dim=EMBEDDING_DIM,
         chunk_collection_name=collection_name,
         create_payload_indexes=True
     )
 
-    update_payload_counts(client, collection_name)
+    update_payload_counts(client, collection_name, json_base)

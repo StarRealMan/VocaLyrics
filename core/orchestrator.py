@@ -235,6 +235,9 @@ class Orchestrator:
 			self.task_manager.start(step_task.task_id)
 			result = agent.run(task=step_task, context=self.context, **resolved_inputs)
 			self.task_manager.succeed(step_task.task_id, result)
+
+			breakpoint()
+
 			self.context.add_agent_message(agent.name, result.content, step_id=step.step_id)
 			self._step_outputs[step.step_id] = result
 			return agent.name, resolved_inputs, result
