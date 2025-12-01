@@ -1,4 +1,37 @@
-tag要怎么用
-否定的条件该怎么处理（「推荐几首非恋爱题材的 DECO*27」）
-不同风格的转换该怎么办
-多个输入的时候该怎么办
+
+我正在构建一个multi agent system，目标是能对用户给定的关于vocaloid歌词的比较general的问题进行回答，做成一个chat bot的形式。
+
+目前我已经有的：
+utils/client.py 负责初始化qdrant以及openai服务的client
+utils/query.py 负责查询qdrant数据库，其中可以查询的内容都有，可以进行参考（其中vocadb_songs这个collection保存了整首歌的embedding，适用于宏观的歌曲level的解析，vocadb_chunks保存了每个段落的embedding，适用于段落级别的分析）
+utils/midi.py 负责对用户给定的midi file进行解析，获得一个dict，用于给曲子填词
+
+tools中是一些构建数据库和测试的工具，一般不用管
+
+core/task.py 用于任务的分配（可以帮我想想这样设计合理吗，可以进行修改）
+core/orchestrator.py 用于整个任务的调度以及循环
+core/context.py 用于处理各个agent产生的context以及对话时的context
+
+agents中有一些我想好的agent（还没有实现）：
+base代表基类
+planner用于规划整个任务
+analyst用于分析，输入歌词，输出对于歌词的各种属性风格意象之类的分析
+retriever可以调用工具进行database query，必要时需要进行rerank
+parser可以调用工具进行midi parse
+composer用于根据各种类型的输入（风格情感意象，歌词做风格转换，续写歌词，曲子填词）写作歌词
+writer用于其他非歌词类的写作任务，例如根据歌词写世界观之类的
+general用于非vocaloid音乐歌词相关任务的fallback
+
+有一些比较常见的用户任务（但不限于此，而是一个能处理广泛任务的chat bot）：
+请帮我分析deco27的音乐特点？
+请跟据我给的midi文件为其填词
+请推荐几首匹诺曹P的欢快的歌曲
+有没有初音未来的关于下雨的歌曲
+2025年的最火的歌曲有哪些
+根据我给的词进行续写
+帮我把这段词转换为kz风格的
+能根据八王子P的歌构建一个轻小说的世界观吗？
+分析Neru的作曲哲学
+。。。。。。
+
+请先帮我定义一个agent的基类并进行解释
