@@ -252,13 +252,12 @@ def query(
     favorite_max: Optional[int] = None,
     length_min: Optional[int] = None,
     length_max: Optional[int] = None,
-    pure_payload: bool = False,
     collection: Optional[str] = None,
 ):
     """
     查询 chunk-level（vocadb_chunks）：
 
-    - 如果 query_text 不为空且 pure_payload=False：
+    - 如果 query_text 不为空：
         → 先做 embedding，再用 query_points(query + filter) 做向量检索。
     - 否则：
         → 只用 payload Filter + scroll 做硬条件筛选。
@@ -293,7 +292,7 @@ def query(
     )
 
     # 情况 1：有文本 & 要做向量检索
-    if query_text and not pure_payload:
+    if query_text:
         if openai_client is None:
             raise ValueError("query_text 不为空时，需要提供 openai_client。")
         vec = embed_text(openai_client, query_text)

@@ -34,11 +34,6 @@ def parse_args() -> argparse.Namespace:
 		help="Number of results to retrieve.",
 	)
 	parser.add_argument(
-		"--pure_payload",
-		action="store_true",
-		help="Skip embeddings and only use structured payload filtering.",
-	)
-	parser.add_argument(
 		"--query_chunks",
 		action="store_true",
 		help="Query chunk-level collection.",
@@ -184,7 +179,7 @@ def main() -> None:
 		format="[%(levelname)s] %(message)s",
 	)
 
-	if args.query_text and args.pure_payload:
+	if args.query_text:
 		logging.warning(
 			"--pure-payload is set; query_text will only influence payload filters."
 		)
@@ -196,7 +191,7 @@ def main() -> None:
 	)
 
 	openai_client = None
-	if args.query_text and not args.pure_payload:
+	if args.query_text:
 		openai_client = init_openai_client()
 
 	if args.query_chunks:
@@ -228,7 +223,6 @@ def main() -> None:
 		favorite_max=args.favorite_max,
 		length_min=args.length_min,
 		length_max=args.length_max,
-		pure_payload=args.pure_payload,
 		collection=collection,
 	)
 
