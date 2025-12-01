@@ -28,14 +28,23 @@ def update_payload_counts(client, collection_name, json_base):
 
         for point in points:
             payload = point.payload or {}
-            song_id = payload.get("song_id")
-            with open(os.path.join(json_base, f"song_{song_id}.json"), "r", encoding="utf-8") as json_file:
-                json_data = json.load(json_file)
+            # song_id = payload.get("song_id")
+            # with open(os.path.join(json_base, f"song_{song_id}.json"), "r", encoding="utf-8") as json_file:
+            #     json_data = json.load(json_file)
             
+            vsingerNames = payload.get("vsingerNames")
+            renewedNames = []
+            for name in vsingerNames:
+                name_clean = name.split(" ")[0]
+                renewedNames.append(name_clean)
+            
+            renewedNames = list(set(renewedNames))
+                
             client.set_payload(
                 collection_name=collection_name,
                 payload={
-                    "lyrics": json_data["originalLyrics"],
+                    "vsingerNames": renewedNames,
+                    "vsingerNum": len(renewedNames)
                 },
                 points=[point.id],
             )

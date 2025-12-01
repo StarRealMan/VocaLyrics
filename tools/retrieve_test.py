@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any, Sequence
 
+from distro import name
+
 from utils.client import (
 	SONG_COLLECTION_NAME,
 	CHUNK_COLLECTION_NAME,
@@ -37,6 +39,11 @@ def parse_args() -> argparse.Namespace:
 		"--query_chunks",
 		action="store_true",
 		help="Query chunk-level collection.",
+	)
+	parser.add_argument(
+		"--name",
+		type=str,
+		help="Song name filter (substring match).",
 	)
 	parser.add_argument(
 		"--producers_any",
@@ -204,6 +211,7 @@ def main() -> None:
 		openai_client=openai_client,
 		top_k=args.top_k,
 		query_text=args.query_text,
+		name = args.name,
 		producers_any=_none_if_empty(args.producers_any),
 		producers_all=_none_if_empty(args.producers_all),
 		producers_must=_none_if_empty(args.producers_must),
