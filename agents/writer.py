@@ -27,19 +27,23 @@ class Writer(Agent):
         """
         params = task.input_params
         topic = params.topic
-        source_material_key = params.source_material_key
+        source_key = params.source_key
+        source = params.source
         
         source_content = ""
-        if source_material_key:
-            data = context.get_memory(source_material_key)
+        if source_key:
+            data = context.get_memory(source_key)
             if data:
-                source_content = f"Source Material ({source_material_key}):\n{str(data)}"
+                source_content += f"Source from ({source_key}):\n{str(data)}"
             else:
-                source_content = f"Source Material ({source_material_key}) was empty or not found."
+                raise ValueError(f"Source key '{source_key}' not found in shared memory.")
         
-        # 如果没有指定 source_material_key，尝试从 input_params 直接获取 source_material
-        if not source_content and params.source_material:
-            source_content = f"Source Material:\n{params.source_material}"
+        # 如果没有指定 source_key input_params 直接获取 source
+        if source:
+            source_content += f"\nSource provided by planner:\n{source}"
+        
+        if not source_content:
+            raise ValueError("Writer requires either 'source_key' or 'source' parameter.")
 
         system_prompt = self._build_system_prompt()
 
@@ -55,7 +59,7 @@ class Writer(Agent):
             ]
         )
         
-        result = response.output.choices[0].message.content
+        result = response.output_text
         
         # 保存结果
         self._save_to_memory(context, task, result)

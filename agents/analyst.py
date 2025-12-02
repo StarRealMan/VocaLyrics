@@ -35,44 +35,39 @@ class Analyst(Agent):
         执行分析任务
         """
         params = task.input_params
-        target_text = params.target_text
-        data_key = params.data_key
-        
-        content_to_analyze = ""
+        retrieved_keys = params.get("retrieved_keys")
+        source_key = params.get("source_key")
+        source = params.get("source")
+
+        source_content = ""
         
         # 1. 获取待分析内容
-        if target_text:
-            content_to_analyze = target_text
-        elif data_key:
-            data = context.get_memory(data_key)
-            if not data:
-                raise ValueError(f"Data key '{data_key}' not found in shared memory.")
-            
-            # 处理从 Retriever 返回的数据结构
-            if isinstance(data, list):
-                # 假设是歌曲列表，提取歌词或摘要
-                # 这里简化处理，将所有 payload 转为字符串
-                # 实际场景中可能需要更精细的提取，比如只提取 'lyrics' 字段
-                formatted_data = []
-                for item in data:
-                    payload = item.get("payload", {})
-                    # 尝试提取歌词，如果没有则使用 metadata
-                    lyrics = payload.get("lyrics", "")
-                    title = payload.get("defaultName", "Unknown Song")
-                    producer = payload.get("producerNames", [])
-                    formatted_data.append(f"Title: {title}\nProducers: {producer}\nLyrics: {lyrics[:500]}...") # 截断以防过长
-                content_to_analyze = "\n\n".join(formatted_data)
+        if source_key:
+            data = context.get_memory(source_key)
+            if data:
+                if retrieved_keys:
+                    source_content += "Source from retriever"
+                    for key in retrieved_keys:
+                        item = data["payload"].get(key)
+                        if item:
+                            source_content += f"\n{key.upper()}:\n{str(item)}"
+                else:
+                    source_content += f"Source from ({source_key}):\n{str(data)}"
             else:
-                content_to_analyze = str(data)
-        else:
-            raise ValueError("Analyst requires either 'target_text' or 'data_key' parameter.")
+                raise ValueError(f"Source key '{source_key}' not found in shared memory.")
+        
+        if source:
+            source_content += f"\nSource provided by planner:\n{source}"
+        
+        if not source_content:
+            raise ValueError(f"Analyst requires either 'retrieved_key', 'source_key' or 'source' parameter.")
 
-        if not content_to_analyze.strip():
+        if not source_content.strip():
              return "No content to analyze."
 
         # 2. 调用 LLM 进行分析
-        self.logger.debug(f"Analyzing content (length: {len(content_to_analyze)})...")
-        analysis_result = self._perform_analysis(content_to_analyze)
+        self.logger.debug(f"Analyzing content (length: {len(source_content)})...")
+        analysis_result = self._perform_analysis(source_content)
         
         # 3. 保存结果
         # 将 Pydantic 对象转为 dict 保存，方便序列化和后续 Agent 读取

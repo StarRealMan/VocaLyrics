@@ -40,6 +40,7 @@ class Orchestrator:
         # 1. 初始化上下文 (使用持久化的 self.context)
         self.context.clear_plan()
         self.context.add_user_message(user_query)
+        final_response = ""
         
         trace_data = {
             "query": user_query,
@@ -73,7 +74,17 @@ class Orchestrator:
                     "output": [t.model_dump() for t in self.context.plan], # 记录生成的计划
                     "context_snapshot": self.context.model_dump()
                 })
-                
+            plan_summary = ", ".join(
+                [f"{t.assigned_agent}: {t.description}" for t in (plan or [])]
+            )
+            self.logger.debug(
+                f"Planner generated {len(plan or [])} tasks: {plan_summary}" if plan else "Planner generated 0 tasks."
+            )
+            
+            assert plan[-1].assigned_agent in {"Lyricist", "Writer", "General"}, (
+                "The final task in the plan must be assigned to either 'Lyricist', 'Writer', or 'General' agent to produce the final user-facing response."
+            )
+
         except Exception as e:
             return f"Planning failed: {str(e)}"
             
@@ -85,7 +96,7 @@ class Orchestrator:
         
         # 简单的顺序执行
         # 进阶版本可以构建 DAG 并并发执行无依赖的任务
-        for task in self.context.plan:
+        for num, task in enumerate(self.context.plan):
             if task.status == TaskStatus.COMPLETED:
                 continue
                 
@@ -107,9 +118,8 @@ class Orchestrator:
                 task.mark_completed(result)
                 self.logger.debug(f"Task Completed. Result: {str(result)[:50]}...")
 
-                # 如果是 Writer 或其他负责最终回复的 Agent，将结果加入对话历史
-                if agent_name == "Writer" and isinstance(result, str):
-                    self.context.add_assistant_message(result)
+                if num == len(self.context.plan) - 1 and isinstance(result, str):
+                    final_response = result
                 
                 # 记录 Execution Trace
                 if trace_dir:
@@ -144,13 +154,10 @@ class Orchestrator:
             self.logger.debug(f"Trace saved to {trace_file}")
 
         # 4. 最终响应
-        # 检查对话历史中是否有 Assistant 的最新回复
-        if self.context.chat_history and self.context.chat_history[-1]["role"] == "assistant":
-            return self.context.chat_history[-1]["content"]
+        if final_response:
+            self.context.add_assistant_message(final_response)
+            return final_response
             
-        # 如果没有直接回复，尝试从最后一个任务的结果中获取
-        last_task = self.context.plan[-1]
-        if last_task.status == TaskStatus.COMPLETED and last_task.result:
-            return str(last_task.result)
-            
-        return "Task execution finished, but no response was generated."
+        no_response_msg = "Task execution finished, but no response was generated."
+        self.context.add_assistant_message(no_response_msg)
+        return no_response_msg

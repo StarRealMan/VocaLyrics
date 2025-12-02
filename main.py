@@ -7,6 +7,7 @@ from agents.analyst import Analyst
 from agents.writer import Writer
 from agents.parser import Parser
 from agents.lyricist import Lyricist
+from agents.general import GeneralAgent
 from utils.logger import setup_logger
 from utils.client import init_openai_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
 
@@ -33,6 +34,7 @@ def main():
     analyst = Analyst(openai_client)
     lyricist = Lyricist(openai_client)
     writer = Writer(openai_client)
+    general = GeneralAgent(openai_client)
     
     agents = {
         "Planner": planner,
@@ -41,6 +43,7 @@ def main():
         "Writer": writer,
         "Parser": parser_agent,
         "Lyricist": lyricist,
+        "General": general,
     }
 
     orchestrator = Orchestrator(agents=agents)

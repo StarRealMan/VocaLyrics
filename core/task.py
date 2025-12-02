@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union, Any, Optional, List
+from typing import Union, Any, Optional, List, Literal
 from pydantic import BaseModel, Field
 import uuid
 
@@ -17,23 +17,34 @@ class ParserInput(BaseModel):
 class AnalystInput(BaseModel):
     """Analyst 所需的输入参数模型。"""
 
-    target_text: Optional[str] = None
-    data_key: Optional[str] = None
+    source_key: Optional[str] = None
+    source: Optional[str] = None
+    retrieved_keys: Optional[List[Literal[
+        "defaultName", "year", "producerNames",
+        "vsingerNames", "tagNames", "lyrics",
+        "ratingScore", "favoritedTimes", "lengthSeconds"
+    ]]] = None
 
 class LyricistInput(BaseModel):
     """Lyricist 所需的输入参数模型。"""
 
     style: Optional[str] = None
     theme: Optional[str] = None
-    midi_structure: Optional[dict] = None
-    base_lyrics: Optional[str] = None
+    midi_key: Optional[str] = None
+    source_key: Optional[str] = None
+    source: Optional[str] = None
 
 class WriterInput(BaseModel):
     """Writer 所需的输入参数模型。"""
 
     topic: str
-    source_material_key: Optional[str] = None
-    source_material: Optional[str] = None
+    source_key: Optional[str] = None
+    source: Optional[str] = None
+
+class GeneralInput(BaseModel):
+    """General Agent 所需的输入参数模型。"""
+
+    query: str
 
 class TaskStatus(Enum):
     """
@@ -71,17 +82,10 @@ class Task(BaseModel):
     Orchestrator 会根据这个字段将任务分发给对应的 Agent 实例。
     """
     
-    dependencies: List[str] = Field(default_factory=list)
-    """
-    依赖的前置任务 ID 列表。
-    Orchestrator 应该确保在执行当前任务之前，这些依赖的任务已经状态为 COMPLETED。
-    这允许 Planner 构建有向无环图 (DAG) 形式的任务流。
-    """
-    
     status: TaskStatus = TaskStatus.PENDING
     """当前任务的状态，默认为 PENDING。"""
     
-    input_params: Union[RetrieverInput, ParserInput, AnalystInput, LyricistInput, WriterInput]
+    input_params: Union[RetrieverInput, ParserInput, AnalystInput, LyricistInput, WriterInput, GeneralInput]
     """
     传递给 Agent 的具体结构化参数。
     Planner 可以在这里预先提取出关键信息。

@@ -31,10 +31,6 @@ class Context(BaseModel):
     def add_assistant_message(self, content: str):
         """添加助手消息到历史记录"""
         self.chat_history.append({"role": "assistant", "content": content})
-        
-    def add_system_message(self, content: str):
-        """添加系统消息（可选，用于调试或特殊指令）"""
-        self.chat_history.append({"role": "system", "content": content})
 
     def set_plan(self, plan: List[Task]):
         """设置新的任务计划"""

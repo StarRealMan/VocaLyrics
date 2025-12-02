@@ -4,7 +4,7 @@ from typing import List, Union, Optional
 from pydantic import BaseModel
 
 from core.context import Context
-from core.task import Task, RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput
+from core.task import Task, RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput, GeneralInput
 from agents.base import Agent
 
 
@@ -13,9 +13,8 @@ class PlannedTask(BaseModel):
 
   description: str
   assigned_agent: str
-  input_params: Union[RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput]
+  input_params: Union[RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput, GeneralInput]
   output_key: Optional[str] = None
-  dependencies: List[str] = []
 
 class PlannerResult(BaseModel):
   """Planner LLM 的整体输出结构。"""
@@ -56,9 +55,7 @@ class Planner(Agent):
         # 添加历史对话 (排除最后一条，因为最后一条是当前的 query，我们在下面会专门处理它以附加 Context Keys)
         if len(context.chat_history) > 1:
             for msg in context.chat_history[:-1]:
-                # 过滤掉 system 类型的消息，只保留 user 和 assistant
-                if msg["role"] in ["user", "assistant"]:
-                    messages.append({"role": msg["role"], "content": msg["content"]})
+                messages.append({"role": msg["role"], "content": msg["content"]})
         
         # 添加当前 Query 和 Context 提示
         current_query_content = f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"
@@ -80,7 +77,6 @@ class Planner(Agent):
             assigned_agent=t.assigned_agent,
             input_params=t.input_params,
             output_key=t.output_key,
-            dependencies=t.dependencies or [],
           )
           new_plan.append(new_task)
 
@@ -111,7 +107,7 @@ Available Agents:
 
 2. Analyst:
    - Capabilities: Analyze lyrics, style, emotions, or imagery.
-   - Input Params: 'target_text' (str) or 'data_key' (str - key in shared_memory).
+   - Input Params: 'source' (str), 'source_key' (str - key in shared_memory), retrieved_keys (list of str - optional, selected meaningful keys for the analysis from retrieved data).
    - Use when: User asks for analysis, explanation, or understanding of a song/artist style.
 
 3. Parser:
@@ -121,18 +117,21 @@ Available Agents:
 
 4. Lyricist:
    - Capabilities: Generate lyrics, rewrite lyrics, or fill lyrics for a melody.
-   - Input Params: 'style' (str), 'theme' (str), 'midi_structure' (dict), 'base_lyrics' (str).
+   - Input Params: 'style' (str), 'theme' (str), 'midi_key' (str - optional, key in shared_memory), 'source_key' (str - optional, key in shared_memory), source' (str, optional).
    - Use when: User asks to write lyrics, continue lyrics, or fill lyrics.
 
 5. Writer:
    - Capabilities: Creative writing, summarizing results, generating final responses.
-   - Input Params: 'topic' (str), 'source_material_key' (str - optional, key in shared_memory).
-   - Use when: User asks for stories, world settings, OR when you need to summarize search/analysis results into a final answer for the user. ALWAYS use this as the final step if the user expects a text response.
+   - Input Params: 'topic' (str), 'source_key' (str - optional, key in shared_memory), 'source' (str, optional).
+   - Use when: User asks for stories, world settings, OR when you need to summarize search/analysis results into a final answer for the user. ALWAYS ensure either Writer or Lyricist provides the final user-facing response when the user expects text output.
 
 6. General:
    - Capabilities: Handle general queries unrelated to Vocaloid or specific tools.
    - Input Params: 'query' (str).
    - Use when: The request is a general chat or doesn't fit other agents.
+
+Finisher Constraint:
+Always use the Writer, Lyricist or General agent to generate the final user-facing response when the user expects text output. 
 
 Output Format:
 You must output a JSON object with a single key "tasks", which is a list of task objects.
@@ -141,7 +140,6 @@ Each task object must have:
 - "assigned_agent": (str) One of the agent names above.
 - "input_params": (dict) Parameters for the agent.
 - "output_key": (str, optional) Key to store the result in shared memory (e.g., "search_results", "analysis_report").
-- "dependencies": (list[str], optional) IDs of tasks that must finish before this one. (Since you generate IDs, you can omit this for simple sequential lists, the Orchestrator executes sequentially by default).
 
 Example 1 (Analysis):
 User: "Analyze the style of Deco*27."
