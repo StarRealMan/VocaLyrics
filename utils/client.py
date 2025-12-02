@@ -24,7 +24,6 @@ FIELD_SCHEMA_MAP = {
     "tagNames": rest.PayloadSchemaType.KEYWORD,
 }
 
-
 def init_openai_client() -> OpenAI:
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -35,7 +34,6 @@ def init_openai_client() -> OpenAI:
         api_key=api_key,
         base_url=base_url
     )
-
 
 def init_qdrant_client_and_collections(
         embedding_dim: int,

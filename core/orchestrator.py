@@ -62,7 +62,7 @@ class Orchestrator:
         
         try:
             # Planner 的 run 方法应该填充 context.plan
-            planner.run(self.context, planning_task)
+            plan = planner.run(self.context, planning_task)
             
             # 记录 Planner 的 Trace
             if trace_dir:
@@ -106,6 +106,10 @@ class Orchestrator:
                 result = agent.run(self.context, task)
                 task.mark_completed(result)
                 self.logger.debug(f"Task Completed. Result: {str(result)[:50]}...")
+
+                # 如果是 Writer 或其他负责最终回复的 Agent，将结果加入对话历史
+                if agent_name == "Writer" and isinstance(result, str):
+                    self.context.add_assistant_message(result)
                 
                 # 记录 Execution Trace
                 if trace_dir:

@@ -6,8 +6,9 @@ from agents.retriever import Retriever
 from agents.analyst import Analyst
 from agents.writer import Writer
 from agents.parser import Parser
-from agents.composer import Composer
+from agents.lyricist import Lyricist
 from utils.logger import setup_logger
+from utils.client import init_openai_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
 
 
 def main():
@@ -19,13 +20,19 @@ def main():
     args = parser.parse_args()
 
     setup_logger(verbose=args.verbose)
+    openai_client = init_openai_client()
+    qdrant_client = init_qdrant_client_and_collections(
+            embedding_dim=1536,
+            song_collection_name=SONG_COLLECTION_NAME,
+            chunk_collection_name=CHUNK_COLLECTION_NAME
+        )
     
-    planner = Planner()
-    retriever = Retriever()
-    analyst = Analyst()
-    writer = Writer()
+    planner = Planner(openai_client)
+    retriever = Retriever(openai_client, qdrant_client)
     parser_agent = Parser()
-    composer = Composer()
+    analyst = Analyst(openai_client)
+    lyricist = Lyricist(openai_client)
+    writer = Writer(openai_client)
     
     agents = {
         "Planner": planner,
@@ -33,7 +40,7 @@ def main():
         "Analyst": analyst,
         "Writer": writer,
         "Parser": parser_agent,
-        "Composer": composer,
+        "Lyricist": lyricist,
     }
 
     orchestrator = Orchestrator(agents=agents)

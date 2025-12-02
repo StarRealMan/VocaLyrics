@@ -1,4 +1,5 @@
 import os
+import json
 from typing import List, Any, Dict, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -6,7 +7,7 @@ from pydantic import BaseModel, Field
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
-from utils.client import init_openai_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
+from utils.client import SONG_COLLECTION_NAME
 from utils.query import query
 
 
@@ -28,16 +29,13 @@ class Retriever(Agent):
     2. 执行数据库查询。
     """
     
-    def __init__(self):
+    def __init__(self, openai_client, qdrant_client):
         super().__init__(name="Retriever", description="Retrieves songs and lyrics from the database based on natural language requests.")
+        self.openai_client = openai_client
+        self.qdrant_client = qdrant_client
         load_dotenv()
-        self.openai_client = init_openai_client()
         # 初始化 Qdrant Client，这里假设 collection 已经存在，所以不需要 create_payload_indexes
-        self.qdrant_client = init_qdrant_client_and_collections(
-            embedding_dim=1536,
-            song_collection_name=SONG_COLLECTION_NAME,
-            chunk_collection_name=CHUNK_COLLECTION_NAME
-        )
+
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:

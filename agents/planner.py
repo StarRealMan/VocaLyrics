@@ -4,9 +4,8 @@ from typing import List, Union, Optional
 from pydantic import BaseModel
 
 from core.context import Context
-from core.task import Task, RetrieverInput, AnalystInput, ParserInput, ComposerInput, WriterInput
+from core.task import Task, RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput
 from agents.base import Agent
-from utils.client import init_openai_client
 
 
 class PlannedTask(BaseModel):
@@ -14,7 +13,7 @@ class PlannedTask(BaseModel):
 
   description: str
   assigned_agent: str
-  input_params: Union[RetrieverInput, AnalystInput, ParserInput, ComposerInput, WriterInput]
+  input_params: Union[RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput]
   output_key: Optional[str] = None
   dependencies: List[str] = []
 
@@ -30,10 +29,10 @@ class Planner(Agent):
     负责分析用户意图，将复杂任务拆解为一系列可执行的子任务 (Task)。
     """
     
-    def __init__(self):
+    def __init__(self, openai_client):
         super().__init__(name="Planner", description="Decomposes user queries into executable plans.")
         load_dotenv()
-        self.openai_client = init_openai_client()
+        self.openai_client = openai_client
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> List[Task]:
@@ -88,6 +87,8 @@ class Planner(Agent):
         # 更新 Context 中的计划
         context.set_plan(new_plan)
 
+        return new_plan
+
     def _build_system_prompt(self) -> str:
         return """
 You are the Planner Agent for a Vocaloid Lyrics Analysis System.
@@ -118,7 +119,7 @@ Available Agents:
    - Input Params: 'file_path' (str).
    - Use when: The user input contains a MIDI file path marked with the tag '[MIDI: <file_path>]'. Extract the path from the tag and pass it to this agent.
 
-4. Composer:
+4. Lyricist:
    - Capabilities: Generate lyrics, rewrite lyrics, or fill lyrics for a melody.
    - Input Params: 'style' (str), 'theme' (str), 'midi_structure' (dict), 'base_lyrics' (str).
    - Use when: User asks to write lyrics, continue lyrics, or fill lyrics.

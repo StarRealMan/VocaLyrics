@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
-from utils.client import init_openai_client
 
 
 class AnalysisResult(BaseModel):
@@ -25,10 +24,10 @@ class Analyst(Agent):
     输入可以是直接的文本，也可以是 Context 中存储的检索结果（歌曲列表）。
     """
     
-    def __init__(self):
+    def __init__(self, openai_client):
         super().__init__(name="Analyst", description="Analyzes lyrics, style, emotions, and imagery.")
+        self.openai_client = openai_client
         load_dotenv()
-        self.openai_client = init_openai_client()
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:

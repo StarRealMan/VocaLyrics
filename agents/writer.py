@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
-from utils.client import init_openai_client
 
 
 class Writer(Agent):
@@ -16,10 +15,10 @@ class Writer(Agent):
     通常作为任务链的最后一步，将结构化数据转化为用户友好的文本。
     """
     
-    def __init__(self):
+    def __init__(self, openai_client):
         super().__init__(name="Writer", description="Generates natural language responses, summaries, or creative content based on data.")
         load_dotenv()
-        self.openai_client = init_openai_client()
+        self.openai_client = openai_client
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:

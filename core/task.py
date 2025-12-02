@@ -20,8 +20,8 @@ class AnalystInput(BaseModel):
     target_text: Optional[str] = None
     data_key: Optional[str] = None
 
-class ComposerInput(BaseModel):
-    """Composer 所需的输入参数模型。"""
+class LyricistInput(BaseModel):
+    """Lyricist 所需的输入参数模型。"""
 
     style: Optional[str] = None
     theme: Optional[str] = None
@@ -67,7 +67,7 @@ class Task(BaseModel):
     assigned_agent: str
     """
     指定负责执行该任务的 Agent 名称。
-    例如："Retriever", "Analyst", "Composer"。
+    例如："Retriever", "Analyst", "Lyricist"。
     Orchestrator 会根据这个字段将任务分发给对应的 Agent 实例。
     """
     
@@ -81,7 +81,7 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     """当前任务的状态，默认为 PENDING。"""
     
-    input_params: Union[RetrieverInput, ParserInput, AnalystInput, ComposerInput, WriterInput]
+    input_params: Union[RetrieverInput, ParserInput, AnalystInput, LyricistInput, WriterInput]
     """
     传递给 Agent 的具体结构化参数。
     Planner 可以在这里预先提取出关键信息。

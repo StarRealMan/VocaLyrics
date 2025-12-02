@@ -37,7 +37,7 @@ class Parser(Agent):
             midi_data = parse_midi(file_path)
             
             # 结果包含 meta 和 notes
-            # 我们可以做一些简单的统计，方便 Writer 或 Composer 使用
+            # 我们可以做一些简单的统计，方便 Writer 或 Lyricist 使用
             note_count = len(midi_data.get("notes", []))
             meta = midi_data.get("meta", {})
             
