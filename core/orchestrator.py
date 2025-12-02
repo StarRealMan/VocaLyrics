@@ -60,7 +60,7 @@ class Orchestrator:
         
         try:
             # Planner 的 run 方法应该填充 context.plan
-            planner_result = planner.run(self.context, planning_task)
+            planner.run(self.context, planning_task)
             
             # 记录 Planner 的 Trace
             if trace_dir:

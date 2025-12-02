@@ -1,11 +1,33 @@
 import os
-import json
 from dotenv import load_dotenv
-from typing import List, Any
+from typing import List, Union, Optional
+from pydantic import BaseModel
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
 from utils.client import init_openai_client
+
+from agents.retriever import RetrieverInput
+from agents.analyst import AnalystInput
+from agents.parser import ParserInput
+from agents.writer import WriterInput
+# from agents.composer import ComposerInput
+
+
+class PlannedTask(BaseModel):
+  """Planner 生成的轻量 Task 模型，用于描述计划结构。"""
+
+  description: str
+  assigned_agent: str
+  input_params: Union[RetrieverInput, AnalystInput, ParserInput, WriterInput]
+  output_key: Optional[str] = None
+  dependencies: List[str] = []
+
+
+class PlannerResponse(BaseModel):
+  """Planner LLM 的整体输出结构。"""
+
+  tasks: List[PlannedTask]
 
 class Planner(Agent):
     """
@@ -18,7 +40,7 @@ class Planner(Agent):
         super().__init__(name="Planner", description="Decomposes user queries into executable plans.")
         load_dotenv()
         self.client = init_openai_client()
-        self.model = os.getenv("OPENAI_API_MODEL", "gpt-4o")
+        self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> List[Task]:
         """
@@ -49,38 +71,29 @@ class Planner(Agent):
         current_query_content = f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"
         messages.append({"role": "user", "content": current_query_content})
         
-        # 调用 LLM
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            response_format={"type": "json_object"}
+        # 调用 LLM，要求按 PlannerResponse 结构输出
+        response = self.client.responses.parse(
+          model=self.model,
+          input=messages,
+          text_format=PlannerResponse,
         )
-        
-        content = response.choices[0].message.content
-        
-        try:
-            plan_data = json.loads(content)
-            tasks_data = plan_data.get("tasks", [])
-            
-            new_plan = []
-            for t_data in tasks_data:
-                new_task = Task(
-                    description=t_data["description"],
-                    assigned_agent=t_data["assigned_agent"],
-                    input_params=t_data.get("input_params", {}),
-                    output_key=t_data.get("output_key"),
-                    dependencies=t_data.get("dependencies", [])
-                )
-                new_plan.append(new_task)
-            
-            # 更新 Context 中的计划
-            context.set_plan(new_plan)
-            return new_plan
-            
-        except json.JSONDecodeError:
-            raise ValueError("Failed to parse planner response as JSON.")
-        except Exception as e:
-            raise ValueError(f"Error creating tasks: {str(e)}")
+
+        parsed: PlannerResponse = response.output_parsed  # SDK 返回已解析的 Pydantic 对象
+
+        # 将 PlannedTask 转换为系统内部使用的 Task
+        new_plan: List[Task] = []
+        for t in parsed.tasks:
+          new_task = Task(
+            description=t.description,
+            assigned_agent=t.assigned_agent,
+            input_params=t.input_params.model_dump(),
+            output_key=t.output_key,
+            dependencies=t.dependencies or [],
+          )
+          new_plan.append(new_task)
+
+        # 更新 Context 中的计划
+        context.set_plan(new_plan)
 
     def _build_system_prompt(self) -> str:
         return """

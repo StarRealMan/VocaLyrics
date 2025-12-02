@@ -1,12 +1,19 @@
 import os
 import json
 from typing import List, Any, Dict
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
 from utils.client import init_openai_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
 from utils.query import query
+
+
+class RetrieverInput(BaseModel):
+  """Retriever 所需的输入参数模型。"""
+
+  request: str
 
 class Retriever(Agent):
     """
@@ -28,15 +35,15 @@ class Retriever(Agent):
             song_collection_name=SONG_COLLECTION_NAME,
             chunk_collection_name=CHUNK_COLLECTION_NAME
         )
-        self.model = os.getenv("OPENAI_API_MODEL", "gpt-4o")
+        self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:
         """
         执行检索任务
         """
-        request = self._get_param(task, "request")
-        if not request:
-            raise ValueError("Retriever requires a 'request' parameter.")
+        # 使用强类型输入模型解析参数
+        params = RetrieverInput(**task.input_params)
+        request = params.request
 
         # 阶段 1: Query Parsing (LLM)
         self.logger.debug(f"Analyzing request: {request}")

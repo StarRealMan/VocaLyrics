@@ -9,6 +9,13 @@ from core.task import Task
 from agents.base import Agent
 from utils.client import init_openai_client
 
+
+class AnalystInput(BaseModel):
+    """Analyst 所需的输入参数模型。"""
+
+    target_text: Optional[str] = None
+    data_key: Optional[str] = None
+
 # 定义 Analyst 的输出结构
 class AnalysisResult(BaseModel):
     summary: str = Field(..., description="A concise summary of the analysis.")
@@ -30,14 +37,15 @@ class Analyst(Agent):
         super().__init__(name="Analyst", description="Analyzes lyrics, style, emotions, and imagery.")
         load_dotenv()
         self.client = init_openai_client()
-        self.model = os.getenv("OPENAI_API_MODEL", "gpt-4o")
+        self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:
         """
         执行分析任务
         """
-        target_text = self._get_param(task, "target_text")
-        data_key = self._get_param(task, "data_key")
+        params = AnalystInput(**task.input_params)
+        target_text = params.target_text
+        data_key = params.data_key
         
         content_to_analyze = ""
         
@@ -72,7 +80,7 @@ class Analyst(Agent):
              return "No content to analyze."
 
         # 2. 调用 LLM 进行分析
-        self.logger.debug(f"Analyzing content (length: {len(content_to_analyze)})...")
+        self.logger.info(f"Analyzing content (length: {len(content_to_analyze)})...")
         analysis_result = self._perform_analysis(content_to_analyze)
         
         # 3. 保存结果
