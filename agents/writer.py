@@ -56,7 +56,7 @@ GUIDELINES:
 
         user_prompt = f"Topic/Instruction: {topic}\n\n{source_content}"
 
-        print(f"  [Writer] Generating content for topic: {topic}...")
+        self.logger.debug(f"Generating content for topic: {topic}...")
         
         response = self.client.chat.completions.create(
             model=self.model,

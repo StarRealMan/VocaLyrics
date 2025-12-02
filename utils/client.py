@@ -51,6 +51,8 @@ def init_qdrant_client_and_collections(
     初始化Qdrant，并确保 song-level 和 chunk-level 两个 collection 存在。
     """
 
+    logger = logging.getLogger("QdrantInit")
+
     assert song_collection_name or chunk_collection_name, \
         "Need at least one of song_collection_name or chunk_collection_name."
     load_dotenv()
@@ -58,17 +60,17 @@ def init_qdrant_client_and_collections(
     api_key = os.getenv("QDRANT__SERVICE__API_KEY")
     if qdrant_dir.startswith("http://") or qdrant_dir.startswith("https://"):
         client = QdrantClient(url=qdrant_dir, api_key=api_key)
-        logging.info("使用远程 Qdrant 服务：%s", qdrant_dir)
+        logger.debug("使用远程 Qdrant 服务：%s", qdrant_dir)
     else:
         qdrant_dir = Path(qdrant_dir)
         qdrant_dir.mkdir(parents=True, exist_ok=True)
         client = QdrantClient(path=str(qdrant_dir), api_key=api_key)
-        logging.info("使用本地嵌入式 Qdrant，目录：%s", qdrant_dir)
+        logger.debug("使用本地嵌入式 Qdrant，目录：%s", qdrant_dir)
 
     def ensure_collection(name: str) -> None:
         try:
             client.get_collection(collection_name=name)
-            logging.info("使用已有 collection：%s", name)
+            logger.debug("使用已有 collection：%s", name)
         except Exception:
             client.recreate_collection(
                 collection_name=name,
@@ -79,7 +81,7 @@ def init_qdrant_client_and_collections(
                 ),
                 on_disk_payload=on_disk,
             )
-            logging.info("创建新的 collection：%s", name)
+            logger.debug("创建新的 collection：%s", name)
     
     def ensure_payload_indexes(name: str, field_schema_map: dict[str, rest.PayloadSchemaType]) -> None:
         for field_name, schema in field_schema_map.items():
@@ -89,13 +91,13 @@ def init_qdrant_client_and_collections(
                     field_name=field_name,
                     field_schema=schema,
                 )
-                logging.info(
+                logger.debug(
                     "为 collection %s 创建字段 %s 的索引。",
                     name,
                     field_name,
                 )
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     "无法为 collection %s 创建字段 %s 的索引，可能已存在。错误信息：%s",
                     name,
                     field_name,

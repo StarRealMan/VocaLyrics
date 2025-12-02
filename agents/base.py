@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+import logging
 from core.context import Context
 from core.task import Task
 
@@ -13,6 +14,7 @@ class Agent(ABC):
     def __init__(self, name: str, description: str):
         self.name = name
         self.description = description
+        self.logger = logging.getLogger(f"Agent.{name}")
 
     @abstractmethod
     def run(self, context: Context, task: Task) -> Any:

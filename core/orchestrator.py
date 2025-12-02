@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import logging
 from typing import Dict, Optional
 from core.context import Context
 from core.task import Task, TaskStatus
@@ -16,6 +17,8 @@ class Orchestrator:
     def __init__(self, agents: Dict[str, Agent], planner_agent_name: str = "Planner"):
         self.agents = agents
         self.planner_name = planner_agent_name
+        self.context = Context()
+        self.logger = logging.getLogger("Orchestrator")
         
         if self.planner_name not in self.agents:
             raise ValueError(f"Planner agent '{self.planner_name}' not found in registered agents.")
@@ -32,9 +35,9 @@ class Orchestrator:
             user_query: 用户的自然语言请求
             trace_dir: 如果提供，将在此目录保存详细的执行追踪日志 (JSON)
         """
-        # 1. 初始化上下文
-        context = Context()
-        context.add_user_message(user_query)
+        # 1. 初始化上下文 (使用持久化的 self.context)
+        self.context.clear_plan()
+        self.context.add_user_message(user_query)
         
         trace_data = {
             "query": user_query,
@@ -43,7 +46,7 @@ class Orchestrator:
         }
         
         # 2. 规划阶段 (Planning)
-        print(f"--- [Orchestrator] Starting Planning Phase ---")
+        self.logger.debug("Starting Planning Phase")
         planner = self.agents.get(self.planner_name)
         if not planner:
             return f"Error: Planner agent '{self.planner_name}' not found."
@@ -57,7 +60,7 @@ class Orchestrator:
         
         try:
             # Planner 的 run 方法应该填充 context.plan
-            planner_result = planner.run(context, planning_task)
+            planner_result = planner.run(self.context, planning_task)
             
             # 记录 Planner 的 Trace
             if trace_dir:
@@ -65,22 +68,22 @@ class Orchestrator:
                     "step": "Planning",
                     "agent": self.planner_name,
                     "input": planning_task.model_dump(),
-                    "output": [t.model_dump() for t in context.plan], # 记录生成的计划
-                    "context_snapshot": context.model_dump()
+                    "output": [t.model_dump() for t in self.context.plan], # 记录生成的计划
+                    "context_snapshot": self.context.model_dump()
                 })
                 
         except Exception as e:
             return f"Planning failed: {str(e)}"
             
-        if not context.plan:
+        if not self.context.plan:
             return "Planner did not generate any tasks. Please try a different query."
 
         # 3. 执行阶段 (Execution)
-        print(f"--- [Orchestrator] Starting Execution Phase ({len(context.plan)} tasks) ---")
+        self.logger.debug(f"Starting Execution Phase ({len(self.context.plan)} tasks)")
         
         # 简单的顺序执行
         # 进阶版本可以构建 DAG 并并发执行无依赖的任务
-        for task in context.plan:
+        for task in self.context.plan:
             if task.status == TaskStatus.COMPLETED:
                 continue
                 
@@ -89,18 +92,18 @@ class Orchestrator:
             
             if not agent:
                 error_msg = f"Agent '{agent_name}' not found for task: {task.description}"
-                print(f"!!! {error_msg}")
+                self.logger.error(error_msg)
                 task.mark_failed(error_msg)
                 continue
                 
-            print(f"--> Executing Task [{task.id[:8]}]: {task.description} (Agent: {agent_name})")
+            self.logger.debug(f"Executing Task [{task.id[:8]}]: {task.description} (Agent: {agent_name})")
             task.mark_in_progress()
             
             try:
                 # 执行任务
-                result = agent.run(context, task)
+                result = agent.run(self.context, task)
                 task.mark_completed(result)
-                print(f"<-- Task Completed. Result: {str(result)[:50]}...")
+                self.logger.debug(f"Task Completed. Result: {str(result)[:50]}...")
                 
                 # 记录 Execution Trace
                 if trace_dir:
@@ -110,12 +113,12 @@ class Orchestrator:
                         "agent": agent_name,
                         "input": task.model_dump(),
                         "output": result,
-                        "context_snapshot": context.model_dump() # 记录每一步后的 Context 状态
+                        "context_snapshot": self.context.model_dump() # 记录每一步后的 Context 状态
                     })
                     
             except Exception as e:
                 error_msg = f"Execution failed: {str(e)}"
-                print(f"!!! {error_msg}")
+                self.logger.error(error_msg)
                 task.mark_failed(error_msg)
                 
                 if trace_dir:
@@ -132,15 +135,15 @@ class Orchestrator:
             trace_file = os.path.join(trace_dir, f"trace_{int(time.time())}.json")
             with open(trace_file, "w", encoding="utf-8") as f:
                 json.dump(trace_data, f, ensure_ascii=False, indent=2, default=str)
-            print(f"--- [Orchestrator] Trace saved to {trace_file} ---")
+            self.logger.debug(f"Trace saved to {trace_file}")
 
         # 4. 最终响应
         # 检查对话历史中是否有 Assistant 的最新回复
-        if context.chat_history and context.chat_history[-1]["role"] == "assistant":
-            return context.chat_history[-1]["content"]
+        if self.context.chat_history and self.context.chat_history[-1]["role"] == "assistant":
+            return self.context.chat_history[-1]["content"]
             
         # 如果没有直接回复，尝试从最后一个任务的结果中获取
-        last_task = context.plan[-1]
+        last_task = self.context.plan[-1]
         if last_task.status == TaskStatus.COMPLETED and last_task.result:
             return str(last_task.result)
             

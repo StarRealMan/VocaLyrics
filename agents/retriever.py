@@ -39,9 +39,9 @@ class Retriever(Agent):
             raise ValueError("Retriever requires a 'request' parameter.")
 
         # 阶段 1: Query Parsing (LLM)
-        print(f"  [Retriever] Analyzing request: {request}")
+        self.logger.debug(f"Analyzing request: {request}")
         query_params = self._analyze_request(request)
-        print(f"  [Retriever] Generated query params: {json.dumps(query_params, ensure_ascii=False)}")
+        self.logger.debug(f"Generated query params: {json.dumps(query_params, ensure_ascii=False)}")
 
         # 阶段 2: Execution
         results = self._execute_search(query_params)
@@ -161,7 +161,7 @@ Example 2: "Songs by Miku published in 2023"
         collection = params.get("collection", SONG_COLLECTION_NAME)
         query_text = params.get("query_text")
 
-        print(query_text)
+        self.logger.debug(f"Query text: {query_text}")
 
         top_k = params.get("top_k", 10)
         filters = params.get("filters", {})

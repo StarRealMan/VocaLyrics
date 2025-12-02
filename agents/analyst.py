@@ -72,7 +72,7 @@ class Analyst(Agent):
              return "No content to analyze."
 
         # 2. 调用 LLM 进行分析
-        print(f"  [Analyst] Analyzing content (length: {len(content_to_analyze)})...")
+        self.logger.debug(f"Analyzing content (length: {len(content_to_analyze)})...")
         analysis_result = self._perform_analysis(content_to_analyze)
         
         # 3. 保存结果
@@ -112,7 +112,7 @@ Example: Instead of "sad rock song", use "tears, rain, falling, dark room, screa
             return response.choices[0].message.parsed
         except Exception as e:
             # Fallback if structured output fails (though parse() usually handles it)
-            print(f"  [Analyst] Error during analysis: {e}")
+            self.logger.error(f"Error during analysis: {e}")
             # Return a dummy result to prevent crash
             return AnalysisResult(
                 summary="Analysis failed.",

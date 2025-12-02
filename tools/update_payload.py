@@ -4,7 +4,7 @@
 
 import os
 import json
-from utils.client import	init_qdrant_client_and_collections
+from utils.client import init_qdrant_client_and_collections
 from utils.query import EMBEDDING_DIM
 
 
@@ -60,7 +60,7 @@ def update_payload_counts(client, collection_name, json_base):
 
 
 if __name__ == "__main__":
-    collection_name = "vocadb_songs"
+    collection_name = "vocadb_chunks"
     json_base = "/root/Data/vocadb_raw_json/"
     client = init_qdrant_client_and_collections(
         embedding_dim=EMBEDDING_DIM,

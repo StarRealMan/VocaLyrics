@@ -35,13 +35,24 @@ class Planner(Agent):
         # 构建 Prompt
         system_prompt = self._build_system_prompt()
         
+        # 构建 Messages (包含历史对话)
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # 添加历史对话 (排除最后一条，因为最后一条是当前的 query，我们在下面会专门处理它以附加 Context Keys)
+        if len(context.chat_history) > 1:
+            for msg in context.chat_history[:-1]:
+                # 过滤掉 system 类型的消息，只保留 user 和 assistant
+                if msg["role"] in ["user", "assistant"]:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # 添加当前 Query 和 Context 提示
+        current_query_content = f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"
+        messages.append({"role": "user", "content": current_query_content})
+        
         # 调用 LLM
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"}
-            ],
+            messages=messages,
             response_format={"type": "json_object"}
         )
         
@@ -83,6 +94,7 @@ IMPORTANT SYSTEM KNOWLEDGE:
   1. Task 1 (Retriever): Find the specific song to get its lyrics/content.
   2. Task 2 (Analyst): Analyze the retrieved song to extract key themes, imagery, and emotions.
   3. Task 3 (Retriever): Search for new songs using the extracted themes/imagery as the search query.
+  4. Task 4 (Writer): Summarize the findings and recommend the songs to the user.
 
 Available Agents:
 1. Retriever: 
@@ -98,7 +110,7 @@ Available Agents:
 3. Parser:
    - Capabilities: Parse MIDI files to extract structure.
    - Input Params: 'file_path' (str).
-   - Use when: User provides a MIDI file for lyrics generation.
+   - Use when: The user input contains a MIDI file path marked with the tag '[MIDI: <file_path>]'. Extract the path from the tag and pass it to this agent.
 
 4. Composer:
    - Capabilities: Generate lyrics, rewrite lyrics, or fill lyrics for a melody.
