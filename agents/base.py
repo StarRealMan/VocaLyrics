@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 import logging
+
 from core.context import Context
 from core.task import Task
+
 
 class Agent(ABC):
     """
@@ -34,7 +36,7 @@ class Agent(ABC):
         """
         辅助方法：从 Task 的 input_params 中安全地获取参数。
         """
-        return task.input_params.get(key, default)
+        return task.input_params.model_dump().get(key, default)
 
     def _save_to_memory(self, context: Context, task: Task, value: Any):
         """

@@ -1,6 +1,5 @@
 import os
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
@@ -10,13 +9,6 @@ from agents.base import Agent
 from utils.client import init_openai_client
 
 
-class AnalystInput(BaseModel):
-    """Analyst 所需的输入参数模型。"""
-
-    target_text: Optional[str] = None
-    data_key: Optional[str] = None
-
-# 定义 Analyst 的输出结构
 class AnalysisResult(BaseModel):
     summary: str = Field(..., description="A concise summary of the analysis.")
     themes: List[str] = Field(..., description="Key themes identified in the lyrics.")
@@ -36,14 +28,14 @@ class Analyst(Agent):
     def __init__(self):
         super().__init__(name="Analyst", description="Analyzes lyrics, style, emotions, and imagery.")
         load_dotenv()
-        self.client = init_openai_client()
+        self.openai_client = init_openai_client()
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:
         """
         执行分析任务
         """
-        params = AnalystInput(**task.input_params)
+        params = task.input_params
         target_text = params.target_text
         data_key = params.data_key
         
@@ -80,7 +72,7 @@ class Analyst(Agent):
              return "No content to analyze."
 
         # 2. 调用 LLM 进行分析
-        self.logger.info(f"Analyzing content (length: {len(content_to_analyze)})...")
+        self.logger.debug(f"Analyzing content (length: {len(content_to_analyze)})...")
         analysis_result = self._perform_analysis(content_to_analyze)
         
         # 3. 保存结果
@@ -91,7 +83,22 @@ class Analyst(Agent):
         return result_dict
 
     def _perform_analysis(self, content: str) -> AnalysisResult:
-        system_prompt = """
+        system_prompt = self._build_system_prompt()
+
+        response = self.openai_client.responses.parse(
+            model=self.model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Content to analyze:\n{content}"}
+            ],
+            text_format=AnalysisResult
+        )
+        parsed: AnalysisResult = response.output_parsed
+
+        return parsed
+
+    def _build_system_prompt(self) -> str:
+        return """
 You are an expert Vocaloid Lyrics Analyst.
 Your task is to analyze the provided song lyrics or metadata and extract key stylistic features.
 
@@ -108,25 +115,3 @@ You must output a JSON object matching the following structure:
 For 'search_query_suggestion', focus on concrete imagery and emotional keywords found in the lyrics, rather than abstract genre names. 
 Example: Instead of "sad rock song", use "tears, rain, falling, dark room, screaming".
 """
-        try:
-            response = self.client.beta.chat.completions.parse(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Content to analyze:\n{content}"}
-                ],
-                response_format=AnalysisResult
-            )
-            return response.choices[0].message.parsed
-        except Exception as e:
-            # Fallback if structured output fails (though parse() usually handles it)
-            self.logger.error(f"Error during analysis: {e}")
-            # Return a dummy result to prevent crash
-            return AnalysisResult(
-                summary="Analysis failed.",
-                themes=[],
-                emotions=[],
-                imagery=[],
-                style_description="Error",
-                search_query_suggestion=None
-            )

@@ -1,7 +1,39 @@
 from enum import Enum
-from typing import Dict, Any, Optional, List
+from typing import Union, Any, Optional, List
 from pydantic import BaseModel, Field
 import uuid
+
+
+class RetrieverInput(BaseModel):
+    """Retriever 所需的输入参数模型。"""
+
+    request: str
+
+class ParserInput(BaseModel):
+    """Parser 所需的输入参数模型。"""
+
+    file_path: str
+
+class AnalystInput(BaseModel):
+    """Analyst 所需的输入参数模型。"""
+
+    target_text: Optional[str] = None
+    data_key: Optional[str] = None
+
+class ComposerInput(BaseModel):
+    """Composer 所需的输入参数模型。"""
+
+    style: Optional[str] = None
+    theme: Optional[str] = None
+    midi_structure: Optional[dict] = None
+    base_lyrics: Optional[str] = None
+
+class WriterInput(BaseModel):
+    """Writer 所需的输入参数模型。"""
+
+    topic: str
+    source_material_key: Optional[str] = None
+    source_material: Optional[str] = None
 
 class TaskStatus(Enum):
     """
@@ -49,7 +81,7 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     """当前任务的状态，默认为 PENDING。"""
     
-    input_params: Dict[str, Any] = Field(default_factory=dict)
+    input_params: Union[RetrieverInput, ParserInput, AnalystInput, ComposerInput, WriterInput]
     """
     传递给 Agent 的具体结构化参数。
     Planner 可以在这里预先提取出关键信息。

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Utility script to update payload counts in Qdrant collection."""
 
-import os
-import json
 from utils.client import init_qdrant_client_and_collections
 from utils.query import EMBEDDING_DIM
 

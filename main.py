@@ -1,11 +1,4 @@
 import argparse
-import os
-import sys
-import logging
-from dotenv import load_dotenv
-
-# 确保项目根目录在 sys.path 中
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core.orchestrator import Orchestrator
 from agents.planner import Planner
@@ -13,7 +6,9 @@ from agents.retriever import Retriever
 from agents.analyst import Analyst
 from agents.writer import Writer
 from agents.parser import Parser
+from agents.composer import Composer
 from utils.logger import setup_logger
+
 
 def main():
     parser = argparse.ArgumentParser(description="VocaLyrics Multi-Agent System")
@@ -30,13 +25,15 @@ def main():
     analyst = Analyst()
     writer = Writer()
     parser_agent = Parser()
+    composer = Composer()
     
     agents = {
         "Planner": planner,
         "Retriever": retriever,
         "Analyst": analyst,
         "Writer": writer,
-        "Parser": parser_agent
+        "Parser": parser_agent,
+        "Composer": composer,
     }
 
     orchestrator = Orchestrator(agents=agents)

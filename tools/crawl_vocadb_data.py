@@ -1,33 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-按排名爬取 VocaDB Original 歌曲，保存必要 metadata。
-字段：
-
-    id
-    defaultName
-    year
-    ratingScore
-    favoritedTimes
-    lengthSeconds
-    artists: [
-        { id, name, role }  # role 由 categories / effectiveRoles 推导
-    ]
-    tags: [
-        { tagId, tagName, count }
-    ]
-    producerNames: [ ... ]
-    primaryCultureCode
-    originalLyrics
-    mainPictureUrlOriginal
-
-限速参数：
-    --delay         每次请求之间的基础延时
-    --rest-every    每下载多少首歌额外休息一次
-    --rest-seconds  额外休息时长
-"""
-
 import argparse
 import json
 import logging
@@ -36,12 +9,11 @@ import time
 import random
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-
 import requests
+
 
 BASE_URL = "https://vocadb.net"
 SONGS_ENDPOINT = f"{BASE_URL}/api/songs"
-
 DETAIL_FIELDS = ",".join([
     "Artists",
     "Albums",
@@ -49,7 +21,6 @@ DETAIL_FIELDS = ",".join([
     "Lyrics",
     "MainPicture",
 ])
-
 USER_AGENT = "VocaDB-Crawler (For Academic Research) (Contact: starydyxyz@gmail.com)"
 
 

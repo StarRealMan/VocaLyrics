@@ -1,16 +1,11 @@
 import os
-from typing import Any, Dict
-from pydantic import BaseModel
+from typing import Any
+
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
 from utils.midi import parse_midi
 
-
-class ParserInput(BaseModel):
-    """Parser 所需的输入参数模型。"""
-
-    file_path: str
 
 class Parser(Agent):
     """
@@ -26,7 +21,7 @@ class Parser(Agent):
         """
         执行解析任务
         """
-        params = ParserInput(**task.input_params)
+        params = task.input_params
         file_path = params.file_path
         
         if not file_path:
@@ -35,7 +30,7 @@ class Parser(Agent):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"MIDI file not found at path: {file_path}")
             
-        self.logger.info(f"Parsing MIDI file: {file_path}...")
+        self.logger.debug(f"Parsing MIDI file: {file_path}...")
         
         try:
             # 调用 utils.midi.parse_midi
@@ -47,7 +42,7 @@ class Parser(Agent):
             meta = midi_data.get("meta", {})
             
             summary = f"Parsed MIDI file with {note_count} notes. Meta: {meta}"
-            self.logger.info(f"Success: {summary}")
+            self.logger.debug(f"Success: {summary}")
             
             # 保存完整数据到 Context
             self._save_to_memory(context, task, midi_data)

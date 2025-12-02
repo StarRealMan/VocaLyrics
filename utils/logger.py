@@ -1,6 +1,7 @@
 import logging
 import sys
 
+
 def setup_logger(verbose: bool = False):
     """
     Setup the global logging configuration.

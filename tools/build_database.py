@@ -1,45 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-从 VocaDB 歌曲 JSON 构建双向量 Qdrant 数据库（使用 OpenAI embeddings）：
-
-1. song-level collection: vocadb_songs
-   - 每首歌 1 条向量
-   - payload.document: 标题 + 空行 + 全部歌词
-
-2. chunk-level collection: vocadb_chunks
-   - 每首歌若干条向量
-   - 使用 “自然段 + 长度控制” 的 chunk 策略
-   - payload.document: 单个 chunk 文本
-
-payload / metadata 包含：
-   song_id, defaultName, year, primaryCultureCode,
-   ratingScore, favoritedTimes, lengthSeconds,
-   producerNames, tagNames, (chunk-level 还有 chunk_index, chunk_id)
-
-使用模型：
-   text-embedding-3-small （1536 维，多语言，便宜）
-
-用法示例：
-   python build_database.py \
-      --json_dir ./vocadb_songs \
-      --qdrant_dir ./qdrant_vdb \
-      --batch_size 64 \
-      --max_songs 0 \
-      --song_level --chunk_level \
-"""
-
 import argparse
 import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
-
 from tqdm import tqdm
-
 from openai import OpenAI
-
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
@@ -48,13 +16,11 @@ from ..utils.client import (
     init_qdrant_client_and_collections,
 )
 
-# ------------ 配置区 ------------
+
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIM = 1536
-
 SONG_COLLECTION_NAME = "vocadb_songs"
 CHUNK_COLLECTION_NAME = "vocadb_chunks"
-# -------------------------------
 
 
 def setup_logger() -> None:

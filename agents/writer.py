@@ -1,5 +1,5 @@
 import os
-from typing import Any, Optional
+from typing import Any
 from dotenv import load_dotenv
 
 from core.context import Context
@@ -7,16 +7,6 @@ from core.task import Task
 from agents.base import Agent
 from utils.client import init_openai_client
 
-
-from pydantic import BaseModel
-
-
-class WriterInput(BaseModel):
-    """Writer 所需的输入参数模型。"""
-
-    topic: str
-    source_material_key: Optional[str] = None
-    source_material: Optional[str] = None
 
 class Writer(Agent):
     """
@@ -29,14 +19,14 @@ class Writer(Agent):
     def __init__(self):
         super().__init__(name="Writer", description="Generates natural language responses, summaries, or creative content based on data.")
         load_dotenv()
-        self.client = init_openai_client()
+        self.openai_client = init_openai_client()
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> Any:
         """
         执行写作任务
         """
-        params = WriterInput(**task.input_params)
+        params = task.input_params
         topic = params.topic
         source_material_key = params.source_material_key
         
@@ -52,7 +42,29 @@ class Writer(Agent):
         if not source_content and params.source_material:
             source_content = f"Source Material:\n{params.source_material}"
 
-        system_prompt = """
+        system_prompt = self._build_system_prompt()
+
+        user_prompt = f"Topic/Instruction: {topic}\n\n{source_content}"
+
+        self.logger.debug(f"Generating content for topic: {topic}...")
+        
+        response = self.openai_client.responses.create(
+            model=self.model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        
+        result = response.output.choices[0].message.content
+        
+        # 保存结果
+        self._save_to_memory(context, task, result)
+        
+        return result
+
+    def _build_system_prompt(self) -> str:
+        return """
 You are a creative and helpful Writer Agent for a Vocaloid Lyrics Analysis System.
 Your goal is to write a response for the user based on the provided source material and topic.
 
@@ -63,22 +75,3 @@ GUIDELINES:
 - If the source material is empty or indicates no results, politely inform the user.
 - Language: Use the same language as the user's request (mostly Chinese based on context).
 """
-
-        user_prompt = f"Topic/Instruction: {topic}\n\n{source_content}"
-
-        self.logger.debug(f"Generating content for topic: {topic}...")
-        
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        
-        result = response.choices[0].message.content
-        
-        # 保存结果
-        self._save_to_memory(context, task, result)
-        
-        return result

@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Utility script to debug Qdrant queries defined in `data.query`."""
 
 import argparse
 import json
 import logging
 from typing import Any, Sequence
-
-from distro import name
 
 from utils.client import (
 	SONG_COLLECTION_NAME,
@@ -15,7 +12,10 @@ from utils.client import (
 	init_openai_client,
 	init_qdrant_client_and_collections,
 )
-from utils.query import EMBEDDING_DIM, query
+from utils.query import (
+	EMBEDDING_DIM,
+	query
+)
 
 
 def parse_args() -> argparse.Namespace:

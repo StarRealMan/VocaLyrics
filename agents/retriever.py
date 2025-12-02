@@ -1,8 +1,8 @@
 import os
-import json
-from typing import List, Any, Dict
-from pydantic import BaseModel
+from typing import List, Any, Dict, Optional
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+
 from core.context import Context
 from core.task import Task
 from agents.base import Agent
@@ -10,10 +10,13 @@ from utils.client import init_openai_client, init_qdrant_client_and_collections,
 from utils.query import query
 
 
-class RetrieverInput(BaseModel):
-  """Retriever 所需的输入参数模型。"""
+class RetrieverAnalyseResult(BaseModel):
+  """LLM 对检索请求解析后的结构化结果。"""
 
-  request: str
+  collection: str = Field(default=SONG_COLLECTION_NAME, description="要查询的 collection 名称")
+  query_text: Optional[str] = Field(default=None, description="用于向量检索的文本查询，可为空")
+  top_k: int = Field(default=10, description="返回结果数量")
+  filters: Dict[str, Any] = Field(default_factory=dict, description="用于 payload 过滤的条件字典")
 
 class Retriever(Agent):
     """
@@ -41,8 +44,7 @@ class Retriever(Agent):
         """
         执行检索任务
         """
-        # 使用强类型输入模型解析参数
-        params = RetrieverInput(**task.input_params)
+        params = task.input_params
         request = params.request
 
         # 阶段 1: Query Parsing (LLM)
@@ -77,7 +79,46 @@ class Retriever(Agent):
         """
         使用 LLM 分析自然语言请求，生成 utils.query.query 所需的参数。
         """
-        system_prompt = """
+        system_prompt = self._build_system_prompt()
+
+        response = self.openai_client.responses.parse(
+            model=self.model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request},
+            ],
+            text_format=RetrieverAnalyseResult,
+        )
+
+        parsed: RetrieverAnalyseResult = response.output_parsed
+        # 返回 dict，方便后续 _execute_search 使用
+        return parsed.model_dump()
+
+    def _execute_search(self, params: Dict[str, Any]) -> List[Any]:
+        """
+        调用 utils.query.query 执行实际查询
+        """
+        collection = params.get("collection", SONG_COLLECTION_NAME)
+        query_text = params.get("query_text")
+
+        self.logger.debug(f"Query text: {query_text}")
+
+        top_k = params.get("top_k", 10)
+        filters = params.get("filters", {})
+        
+        # 将 filters 字典展开作为参数传递给 query 函数
+        # 注意：utils.query.query 的参数名与 filters 中的 key 需要对应
+        return query(
+            qdrant_client=self.qdrant_client,
+            openai_client=self.openai_client,
+            top_k=top_k,
+            query_text=query_text,
+            collection=collection,
+            **filters
+        )
+    
+    def _build_system_prompt(self) -> str:
+        return """
 You are an expert Query Parser for a Vocaloid Song Database.
 Your goal is to convert a natural language search request into a structured JSON object containing parameters for a database query function.
 
@@ -146,40 +187,3 @@ Example 2: "Songs by Miku published in 2023"
   }
 }
 """
-        response = self.openai_client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request}
-            ],
-            response_format={"type": "json_object"}
-        )
-        
-        try:
-            return json.loads(response.choices[0].message.content)
-        except json.JSONDecodeError:
-            # Fallback default
-            return {"collection": SONG_COLLECTION_NAME, "top_k": 5, "filters": {}}
-
-    def _execute_search(self, params: Dict[str, Any]) -> List[Any]:
-        """
-        调用 utils.query.query 执行实际查询
-        """
-        collection = params.get("collection", SONG_COLLECTION_NAME)
-        query_text = params.get("query_text")
-
-        self.logger.debug(f"Query text: {query_text}")
-
-        top_k = params.get("top_k", 10)
-        filters = params.get("filters", {})
-        
-        # 将 filters 字典展开作为参数传递给 query 函数
-        # 注意：utils.query.query 的参数名与 filters 中的 key 需要对应
-        return query(
-            qdrant_client=self.qdrant_client,
-            openai_client=self.openai_client,
-            top_k=top_k,
-            query_text=query_text,
-            collection=collection,
-            **filters
-        )

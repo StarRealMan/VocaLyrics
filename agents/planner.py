@@ -2,16 +2,11 @@ import os
 from dotenv import load_dotenv
 from typing import List, Union, Optional
 from pydantic import BaseModel
+
 from core.context import Context
-from core.task import Task
+from core.task import Task, RetrieverInput, AnalystInput, ParserInput, ComposerInput, WriterInput
 from agents.base import Agent
 from utils.client import init_openai_client
-
-from agents.retriever import RetrieverInput
-from agents.analyst import AnalystInput
-from agents.parser import ParserInput
-from agents.writer import WriterInput
-# from agents.composer import ComposerInput
 
 
 class PlannedTask(BaseModel):
@@ -19,12 +14,11 @@ class PlannedTask(BaseModel):
 
   description: str
   assigned_agent: str
-  input_params: Union[RetrieverInput, AnalystInput, ParserInput, WriterInput]
+  input_params: Union[RetrieverInput, AnalystInput, ParserInput, ComposerInput, WriterInput]
   output_key: Optional[str] = None
   dependencies: List[str] = []
 
-
-class PlannerResponse(BaseModel):
+class PlannerResult(BaseModel):
   """Planner LLM 的整体输出结构。"""
 
   tasks: List[PlannedTask]
@@ -39,7 +33,7 @@ class Planner(Agent):
     def __init__(self):
         super().__init__(name="Planner", description="Decomposes user queries into executable plans.")
         load_dotenv()
-        self.client = init_openai_client()
+        self.openai_client = init_openai_client()
         self.model = os.getenv("OPENAI_API_MODEL", "gpt-5.1")
 
     def run(self, context: Context, task: Task) -> List[Task]:
@@ -71,14 +65,13 @@ class Planner(Agent):
         current_query_content = f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"
         messages.append({"role": "user", "content": current_query_content})
         
-        # 调用 LLM，要求按 PlannerResponse 结构输出
-        response = self.client.responses.parse(
+        # 调用 LLM，要求按 PlannerResult 结构输出
+        response = self.openai_client.responses.parse(
           model=self.model,
           input=messages,
-          text_format=PlannerResponse,
+          text_format=PlannerResult,
         )
-
-        parsed: PlannerResponse = response.output_parsed  # SDK 返回已解析的 Pydantic 对象
+        parsed: PlannerResult = response.output_parsed  # SDK 返回已解析的 Pydantic 对象
 
         # 将 PlannedTask 转换为系统内部使用的 Task
         new_plan: List[Task] = []
@@ -86,7 +79,7 @@ class Planner(Agent):
           new_task = Task(
             description=t.description,
             assigned_agent=t.assigned_agent,
-            input_params=t.input_params.model_dump(),
+            input_params=t.input_params,
             output_key=t.output_key,
             dependencies=t.dependencies or [],
           )

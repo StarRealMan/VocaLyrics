@@ -1,18 +1,15 @@
 import os
 import logging
 from pathlib import Path
-from typing import Union
-
 from openai import OpenAI
 from dotenv import load_dotenv
-
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from qdrant_client.models import Distance, VectorParams
 
+
 SONG_COLLECTION_NAME = "vocadb_songs"
 CHUNK_COLLECTION_NAME = "vocadb_chunks"
-
 FIELD_SCHEMA_MAP = {
     "year": rest.PayloadSchemaType.INTEGER,
     "month": rest.PayloadSchemaType.INTEGER,
