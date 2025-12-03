@@ -44,3 +44,5 @@ class Agent(ABC):
         """
         if task.output_key:
             context.set_memory(task.output_key, value)
+            # 记录该数据的描述信息 (使用 Task 的 description)
+            context.key_descriptions[task.output_key] = task.description

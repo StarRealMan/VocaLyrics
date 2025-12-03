@@ -7,19 +7,22 @@ import uuid
 class RetrieverInput(BaseModel):
     """Retriever 所需的输入参数模型。"""
 
-    request: str
+    assigned_agent: Literal["Retriever"] = "Retriever"
+    request: str = Field(..., description="用户的自然语言检索请求。")
 
 class ParserInput(BaseModel):
     """Parser 所需的输入参数模型。"""
 
+    assigned_agent: Literal["Parser"] = "Parser"
     file_path: str
 
 class AnalystInput(BaseModel):
     """Analyst 所需的输入参数模型。"""
 
+    assigned_agent: Literal["Analyst"] = "Analyst"
     source_key: Optional[str] = None
     source: Optional[str] = None
-    retrieved_keys: Optional[List[Literal[
+    retrieved_properties: Optional[List[Literal[
         "defaultName", "year", "producerNames",
         "vsingerNames", "tagNames", "lyrics",
         "ratingScore", "favoritedTimes", "lengthSeconds"
@@ -28,6 +31,7 @@ class AnalystInput(BaseModel):
 class LyricistInput(BaseModel):
     """Lyricist 所需的输入参数模型。"""
 
+    assigned_agent: Literal["Lyricist"] = "Lyricist"
     style: Optional[str] = None
     theme: Optional[str] = None
     midi_key: Optional[str] = None
@@ -37,6 +41,7 @@ class LyricistInput(BaseModel):
 class WriterInput(BaseModel):
     """Writer 所需的输入参数模型。"""
 
+    assigned_agent: Literal["Writer"] = "Writer"
     topic: str
     source_key: Optional[str] = None
     source: Optional[str] = None
@@ -44,6 +49,7 @@ class WriterInput(BaseModel):
 class GeneralInput(BaseModel):
     """General Agent 所需的输入参数模型。"""
 
+    assigned_agent: Literal["General"] = "General"
     query: str
 
 class TaskStatus(Enum):

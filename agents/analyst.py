@@ -35,9 +35,9 @@ class Analyst(Agent):
         执行分析任务
         """
         params = task.input_params
-        retrieved_keys = params.get("retrieved_keys")
-        source_key = params.get("source_key")
-        source = params.get("source")
+        retrieved_properties = params.retrieved_properties
+        source_key = params.source_key
+        source = params.source
 
         source_content = ""
         
@@ -45,12 +45,14 @@ class Analyst(Agent):
         if source_key:
             data = context.get_memory(source_key)
             if data:
-                if retrieved_keys:
+                if retrieved_properties:
                     source_content += "Source from retriever"
-                    for key in retrieved_keys:
-                        item = data["payload"].get(key)
-                        if item:
-                            source_content += f"\n{key.upper()}:\n{str(item)}"
+                    for idx, item in enumerate(data):
+                        source_content += f"\n\n--- Item {idx + 1} ---"
+                        for key in retrieved_properties:
+                            value = item["payload"].get(key)
+                            if value:
+                                source_content += f"\n{key.upper()}:\n{str(value)}"
                 else:
                     source_content += f"Source from ({source_key}):\n{str(data)}"
             else:

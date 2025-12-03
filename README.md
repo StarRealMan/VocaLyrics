@@ -23,6 +23,9 @@ docker compose up -d
 python -m tools.crawl_vocadb_data --output_dir /path/to/json
 python -m tools.build_database --json_dir /path/to/json --song_level --chunk_level
 
+# analyze stats
+python -m tools.analyze_stats
+
 # run retrieve test
 python -m tools.retrieve_test
 

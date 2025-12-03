@@ -20,6 +20,9 @@ class Context(BaseModel):
     # Key 是数据的标识符 (如 "retrieved_songs"), Value 是具体数据
     shared_memory: Dict[str, Any] = Field(default_factory=dict)
     
+    # 共享内存元数据，用于记录每个 Key 的描述信息 (通常是生成该数据的 Task description)
+    key_descriptions: Dict[str, str] = Field(default_factory=dict)
+    
     # 当前的任务计划
     # 由 Planner 生成的一系列 Task 对象
     plan: List[Task] = Field(default_factory=list)

@@ -1,25 +1,30 @@
 import os
 from dotenv import load_dotenv
 from typing import List, Union, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.context import Context
 from core.task import Task, RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput, GeneralInput
 from agents.base import Agent
 
-
 class PlannedTask(BaseModel):
-  """Planner 生成的轻量 Task 模型，用于描述计划结构。"""
+    """Planner 生成的轻量 Task 模型，用于描述计划结构。"""
 
-  description: str
-  assigned_agent: str
-  input_params: Union[RetrieverInput, AnalystInput, ParserInput, LyricistInput, WriterInput, GeneralInput]
-  output_key: Optional[str] = None
+    description: str = Field(..., description="Description of the task to be performed by the agent.")
+    input_params: Union[
+        RetrieverInput,
+        AnalystInput,
+        ParserInput,
+        LyricistInput,
+        WriterInput,
+        GeneralInput
+    ] = Field(..., description="Structured input parameters for the task. Select the assigned agent with the corresponding input.")
+    output_key: Optional[str] = Field(..., description="Key under which the task result should be stored in the shared context.")
 
 class PlannerResult(BaseModel):
-  """Planner LLM 的整体输出结构。"""
+    """Planner LLM 的整体输出结构。"""
 
-  tasks: List[PlannedTask]
+    tasks: List[PlannedTask] = Field(..., description="List of planned tasks to execute.")
 
 class Planner(Agent):
     """
@@ -57,8 +62,17 @@ class Planner(Agent):
             for msg in context.chat_history[:-1]:
                 messages.append({"role": msg["role"], "content": msg["content"]})
         
+        # 构建内存元数据描述
+        memory_context_str = ""
+        if context.shared_memory:
+            memory_context_str += "Available Shared Memory (Key: Description):"
+            for key in context.shared_memory:
+                desc = context.key_descriptions.get(key, "Unknown data")
+                memory_context_str += f"\n - {key}: {desc}"
+            memory_context_str += "\n(You can use these keys as 'input_params' for agents to reuse existing data without searching again.)"
+
         # 添加当前 Query 和 Context 提示
-        current_query_content = f"User Query: {user_query}\n\nCurrent Context Keys: {list(context.shared_memory.keys())}"
+        current_query_content = f"User Query: {user_query}\n\n{memory_context_str}"
         messages.append({"role": "user", "content": current_query_content})
         
         # 调用 LLM，要求按 PlannerResult 结构输出
@@ -74,7 +88,7 @@ class Planner(Agent):
         for t in parsed.tasks:
           new_task = Task(
             description=t.description,
-            assigned_agent=t.assigned_agent,
+            assigned_agent=t.input_params.assigned_agent,
             input_params=t.input_params,
             output_key=t.output_key,
           )
@@ -137,8 +151,7 @@ Output Format:
 You must output a JSON object with a single key "tasks", which is a list of task objects.
 Each task object must have:
 - "description": (str) Clear instruction for the agent.
-- "assigned_agent": (str) One of the agent names above.
-- "input_params": (dict) Parameters for the agent.
+- "input_params": (dict) Parameters for the agent. The "assigned_agent" field inside input_params determines which agent is used.
 - "output_key": (str, optional) Key to store the result in shared memory (e.g., "search_results", "analysis_report").
 
 Example 1 (Analysis):
@@ -148,16 +161,16 @@ JSON Output:
   "tasks": [
     {
       "description": "Search for top 5 popular songs by Deco*27.",
-      "assigned_agent": "Retriever",
       "input_params": {
+        "assigned_agent": "Retriever",
         "request": "Find top 5 popular songs by producer Deco*27"
       },
       "output_key": "deco_songs"
     },
     {
       "description": "Analyze the musical and lyrical style based on the retrieved songs.",
-      "assigned_agent": "Analyst",
       "input_params": {
+        "assigned_agent": "Analyst",
         "data_key": "deco_songs"
       },
       "output_key": "style_analysis"
@@ -172,32 +185,32 @@ JSON Output:
   "tasks": [
     {
       "description": "Find the song 'Rolling Girl' to get its lyrics.",
-      "assigned_agent": "Retriever",
       "input_params": {
+        "assigned_agent": "Retriever",
         "request": "Find the song named 'Rolling Girl'"
       },
       "output_key": "target_song"
     },
     {
       "description": "Analyze the lyrics of 'Rolling Girl' to extract themes and imagery.",
-      "assigned_agent": "Analyst",
       "input_params": {
+        "assigned_agent": "Analyst",
         "data_key": "target_song"
       },
       "output_key": "song_analysis"
     },
     {
       "description": "Search for songs with similar themes and imagery based on the analysis.",
-      "assigned_agent": "Retriever",
       "input_params": {
+        "assigned_agent": "Retriever",
         "request": "Find songs with themes and imagery matching the analysis in 'song_analysis'"
       },
       "output_key": "similar_songs"
     },
     {
       "description": "Summarize the found similar songs and present them to the user.",
-      "assigned_agent": "Writer",
       "input_params": {
+        "assigned_agent": "Writer",
         "topic": "Recommend the similar songs found to the user, explaining why they fit the style of Rolling Girl.",
         "source_material_key": "similar_songs"
       },

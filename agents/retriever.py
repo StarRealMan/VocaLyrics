@@ -10,14 +10,40 @@ from agents.base import Agent
 from utils.client import SONG_COLLECTION_NAME
 from utils.query import query
 
+class RetrieverFilter(BaseModel):
+    """用于 payload 过滤的条件字典结构。"""
+
+    name: Optional[str] = Field(None, description="Exact match for song name.")
+    producers_any: Optional[List[str]] = Field(None, description="Match ANY of these producers.")
+    producers_all: Optional[List[str]] = Field(None, description="Match ALL of these producers.")
+    producers_must: Optional[List[str]] = Field(None, description="Must be exactly these producers.")
+    producers_min: Optional[int] = Field(None, description="Minimum number of producers.")
+    producers_max: Optional[int] = Field(None, description="Maximum number of producers.")
+    vsingers_any: Optional[List[str]] = Field(None, description="Match ANY of these vocalists.")
+    vsingers_all: Optional[List[str]] = Field(None, description="Match ALL of these vocalists.")
+    vsingers_must: Optional[List[str]] = Field(None, description="Must be exactly these vocalists.")
+    vsingers_min: Optional[int] = Field(None, description="Minimum number of vocalists.")
+    vsingers_max: Optional[int] = Field(None, description="Maximum number of vocalists.")
+    tagNames: Optional[List[str]] = Field(None, description="Match ANY of these tags (e.g., 'rock', 'sad', 'summer').")
+    rating_min: Optional[float] = Field(None, description="Minimum rating score.")
+    rating_max: Optional[float] = Field(None, description="Maximum rating score")
+    favorite_min: Optional[int] = Field(None, description="Minimum number of favorites.")
+    favorite_max: Optional[int] = Field(None, description="Maximum number of favorites.")
+    length_min: Optional[int] = Field(None, description="Minimum song length in seconds.")
+    length_max: Optional[int] = Field(None, description="Maximum song length in seconds.")
+    culture: Optional[str] = Field(None, description="Primary culture code (e.g., 'ja', 'en', 'zh').")
+    year_min: Optional[int] = Field(None, description="Minimum year.")
+    year_max: Optional[int] = Field(None, description="Maximum year.")
+    month_min: Optional[int] = Field(None, description="Minimum month.")
+    month_max: Optional[int] = Field(None, description="Maximum month.")
 
 class RetrieverAnalyseResult(BaseModel):
-  """LLM 对检索请求解析后的结构化结果。"""
+    """LLM 对检索请求解析后的结构化结果。"""
 
-  collection: str = Field(default=SONG_COLLECTION_NAME, description="要查询的 collection 名称")
-  query_text: Optional[str] = Field(default=None, description="用于向量检索的文本查询，可为空")
-  top_k: int = Field(default=10, description="返回结果数量")
-  filters: Dict[str, Any] = Field(default_factory=dict, description="用于 payload 过滤的条件字典")
+    collection: Literal = Field(default=SONG_COLLECTION_NAME, description="Collection level to query ('vocadb_songs' or 'vocadb_chunks').")
+    query_text: Optional[str] = Field(None, description="The semantic search query string, None if using payload filter only")
+    top_k: int = Field(default=10, description="Number of results to return.")
+    filters: RetrieverFilter = Field(default_factory=RetrieverFilter, description="Payload filter conditions.")
 
 class Retriever(Agent):
     """
@@ -56,7 +82,7 @@ class Retriever(Agent):
         # 结果处理：将 PointStruct 对象转换为字典，以便序列化
         serialized_results = []
         for point in results:
-            if query_params.get("query_text"):
+            if query_params.query_text:
                 serialized_results.append({
                     "id": point.id,
                     "score": point.score,
@@ -89,20 +115,20 @@ class Retriever(Agent):
         )
 
         parsed: RetrieverAnalyseResult = response.output_parsed
-        # 返回 dict，方便后续 _execute_search 使用
-        return parsed.model_dump()
+
+        return parsed
 
     def _execute_search(self, params: Dict[str, Any]) -> List[Any]:
         """
         调用 utils.query.query 执行实际查询
         """
-        collection = params.get("collection", SONG_COLLECTION_NAME)
-        query_text = params.get("query_text")
+        collection = params.collection
+        query_text = params.query_text
 
         self.logger.debug(f"Query text: {query_text}")
 
-        top_k = params.get("top_k", 10)
-        filters = params.get("filters", {})
+        top_k = params.top_k
+        filters = params.filters
         
         # 将 filters 字典展开作为参数传递给 query 函数
         # 注意：utils.query.query 的参数名与 filters 中的 key 需要对应
