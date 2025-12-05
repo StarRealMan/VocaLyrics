@@ -1,5 +1,6 @@
+import json
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, List
 import logging
 
 from core.context import Context
@@ -44,5 +45,56 @@ class Agent(ABC):
         """
         if task.output_key:
             context.set_memory(task.output_key, value)
-            # 记录该数据的描述信息 (使用 Task 的 description)
-            context.key_descriptions[task.output_key] = task.description
+            context.set_key_description(task.output_key, task.description)
+
+    def _format_memory_content(self, context: Context, keys: List[str]) -> str:
+        """
+        智能格式化共享内存中的数据，使其适合放入 Prompt。
+        会自动识别数据类型（如检索结果列表）并进行精简。
+        """
+        formatted_parts = []
+        
+        # 是否可以类别识别？Output类型
+
+        for key in keys:
+            data = context.get_memory(key)
+            if not data:
+                self.logger.warning(f"Key '{key}' not found in memory, skipping.")
+                continue
+
+            desc = context.key_descriptions.get(key, "Reference Data")
+            header = f"--- Data Source: {key} ({desc}) ---"
+            content_str = ""
+
+            # 策略 1: 处理列表 (通常是 Retriever 的结果)
+            if isinstance(data, list):
+                # 检查是否是检索结果 (包含 payload 字段)
+                if len(data) > 0 and isinstance(data[0], dict) and "payload" in data[0]:
+                    # 精简检索结果，只保留核心字段
+                    items = []
+                    for idx, item in enumerate(data):
+                        payload = item.get("payload", {})
+                        score = item.get("score", 0)
+                        # 提取歌名和歌词预览
+                        name = payload.get("name", "Unknown")
+                        lyrics = payload.get("lyrics_preview") or payload.get("lyrics") or ""
+                        # 截断过长的歌词
+                        if len(lyrics) > 200: lyrics = lyrics[:200] + "..."
+                        
+                        items.append(f"[{idx+1}] Title: {name} (Score: {score:.2f})\n    Content: {lyrics}")
+                    content_str = "\n".join(items)
+                else:
+                    # 普通列表
+                    content_str = json.dumps(data, indent=2, ensure_ascii=False)
+            
+            # 策略 2: 处理字典 (通常是 Analyst 或 Parser 的结果)
+            elif isinstance(data, dict):
+                content_str = json.dumps(data, indent=2, ensure_ascii=False)
+            
+            # 策略 3: 其他 (字符串等)
+            else:
+                content_str = str(data)
+
+            formatted_parts.append(f"{header}\n{content_str}\n")
+
+        return "\n".join(formatted_parts)

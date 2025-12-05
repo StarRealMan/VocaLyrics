@@ -46,6 +46,10 @@ class Context(BaseModel):
     def set_memory(self, key: str, value: Any):
         """向共享内存写入数据"""
         self.shared_memory[key] = value
+    
+    def set_key_description(self, key: str, description: str):
+        """设置共享内存中某个 Key 的描述信息"""
+        self.key_descriptions[key] = description
         
     def clear_plan(self):
         """清空当前计划"""

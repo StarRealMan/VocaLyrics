@@ -23,10 +23,11 @@ class Lyricist(Agent):
         """执行作词任务"""
         params = task.input_params
 
+        goal = params.goal
         style = params.style
         theme = params.theme
         midi_key = params.midi_key
-        source_key = params.source_key
+        source_keys = params.source_keys
         source = params.source
 
         if midi_key:
@@ -35,23 +36,21 @@ class Lyricist(Agent):
                 midi_structure = midi_data.get("structure", {})
             else:
                 raise ValueError(f"MIDI key '{midi_key}' not found in shared memory.")
+        else:
+            midi_structure = {}
         
-        source_content = ""
-        if source_key:
-            data = context.get_memory(source_key)
-            if data:
-                source_content += f"Source from ({source_key}):\n{str(data)}"
-            else:
-                raise ValueError(f"Source key '{source_key}' not found in shared memory.")
+        # 使用基类的智能格式化处理 source_keys
+        source_content = self._format_memory_content(context, source_keys)
+        
         if source:
             source_content += f"\nSource provided by planner:\n{source}"
         
         if not style and not theme and not source_content and not midi_key:
-            raise ValueError("Lyricist requires at least one of 'style', 'theme', 'source_key', 'source', or 'midi_key' parameter.")
+            raise ValueError("Lyricist requires at least one of 'style', 'theme', 'source_keys', 'source', or 'midi_key' parameter.")
 
         system_prompt = self._build_system_prompt()
 
-        user_prompt = self._build_user_prompt(style, theme, midi_structure, source_content)
+        user_prompt = self._build_user_prompt(goal, style, theme, midi_structure, source_content)
         self.logger.debug(f"Composing lyrics with style='{style}', theme='{theme}'...")
 
         response = self.openai_client.responses.create(

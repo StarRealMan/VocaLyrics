@@ -110,84 +110,66 @@ class Retriever(Agent):
             rerank_top_k = target_top_k
 
         # 阶段 2: Vector Search (Recall)
-        # 临时修改 top_k 用于召回，注意不要修改原始 query_params 对象，以免后续逻辑混乱
-        # 我们在 _execute_search 内部处理，或者传入 override 参数
-        results = self._execute_search(query_params, override_top_k=rerank_top_k)
+        query_params.top_k = rerank_top_k
 
-        # 阶段 3: Reranking & Filtering
-        final_results = results
+        ranking_keys = []
+        
+        # 注意：这里需要适配 _execute_search 的参数格式
+        # _execute_search 接受的是 RetrieverAnalyseResult 对象，我们需要临时修改它的 top_k
+        # 但由于 Pydantic 模型是不可变的(默认情况下不是，但为了安全起见)，我们最好传入 dict 给 _execute_search
+        # 不过之前的 _execute_search 实现是接收 dict 的，所以我们直接传 dict
+        results = self._execute_search(query_params)
 
-        # 只有在结果足够多且启用了 Rerank 时才进行复杂处理
+        # 阶段 3: Reranking (Cohere)
         if query_params.use_rerank and len(results) > target_top_k:
-            
-            # 3.1 Prefilter (基于数值字段的硬筛选/截断)
-            # 修复 Bug 1 & 3: 使用映射表，移除循环
-            if query_params.prefilt_key and len(results) > filting_top_k:
-                # 获取实际的 payload key
-                payload_key = key_reference_table.get(query_params.prefilt_key)
-                
-                if payload_key:
-                    self.logger.info(f"Prefiltering: Sorting by {payload_key} (Logic: {query_params.prefilt_key})")
-                    
-                    # 确定排序顺序：除了 'length' 可能有人想找短的？通常默认数值越大越好，除了 rank/date?
-                    # 假设：rating/favorite/year/month 都是越大越好(reverse=True)
-                    # length: 默认长歌？这里简单处理为倒序（大的在前）
-                    # 如果需要支持 "最短"，需要在 prompt 里增加 sort_order 字段
-                    reverse = True 
-                    
-                    # 排序并截断
-                    # 注意：get(key, 0) 默认值设为 -1 或 0 取决于你的业务，防止报错
-                    final_results = sorted(
-                        results, 
-                        key=lambda x: x.payload.get(payload_key, 0) or 0, 
-                        reverse=reverse
-                    )[:filting_top_k]
-                else:
-                    self.logger.warning(f"Prefilt key '{query_params.prefilt_key}' not found in reference table.")
 
-            # 3.2 Semantic Rerank (Cohere)
+            if query_params.prefilt_key and query_params.filters and len(results) > filting_top_k:
+
+                filters = query_params.filters.model_dump(exclude_none=True)
+                for key in filters.keys():
+                    if key.split("_")[0] == query_params.prefilt_key:
+                        
+                        reverse = False if key.endswith("max") else True
+                        self.logger.info(f"Filtering {filting_top_k} items based on field number before reranking.")
+                        results = sorted(results, key=lambda x: x.payload.get(query_params.prefilt_key, 0), reverse=reverse)[:filting_top_k]
+            
             if query_params.query_text:
                 try:
-                    self.logger.info(f"Reranking {len(final_results)} items with Cohere...")
+                    self.logger.info(f"Reranking {len(results)} items with Cohere...")
                     
+                    # 准备文档
                     docs = []
                     valid_indices = []
                     
-                    for i, point in enumerate(final_results):
-                        # 优先使用 lyrics_preview 或 lyrics
-                        content = point.payload.get("lyrics_preview") or point.payload.get("lyrics") or point.payload.get("name", "")
+                    for i, point in enumerate(results):
+                        content = point.payload.get("lyrics") or point.payload.get("name", "")
+                        # 截断以防万一，虽然 Cohere 支持较长文本
                         if content:
                             docs.append(str(content)[:2000]) 
                             valid_indices.append(i)
                     
-                    if docs:
-                        rerank_response = self.cohere_client.rerank(
-                            model="rerank-multilingual-v3.0",
-                            query=query_params.query_text,
-                            documents=docs,
-                            top_n=target_top_k, 
-                        )
-                        
-                        reranked_points = []
-                        for r in rerank_response.results:
-                            original_idx = valid_indices[r.index]
-                            point = final_results[original_idx]
-                            point.score = r.relevance_score
-                            reranked_points.append(point)
-                        
-                        final_results = reranked_points
-                        self.logger.info("Reranking completed.")
-                    else:
-                        final_results = final_results[:target_top_k]
+                    rerank_response = self.cohere_client.rerank(
+                        model="rerank-multilingual-v3.0",
+                        query=query_params.query_text,
+                        documents=docs,
+                        top_n=target_top_k, # 只取最终需要的 Top K
+                    )
+                    
+                    reranked_points = []
+                    for r in rerank_response.results:
+                        original_idx = valid_indices[r.index]
+                        point = results[original_idx]
+                        point.score = r.relevance_score
+                        reranked_points.append(point)
+                    
+                    final_results = reranked_points
+                    self.logger.info("Reranking completed.")
 
                 except Exception as e:
                     self.logger.error(f"Reranking failed: {e}. Falling back to vector scores.")
-                    final_results = final_results[:target_top_k]
-            else:
-                # 如果没有 query_text (纯 metadata 搜索)，直接截取
-                final_results = final_results[:target_top_k]
+                    final_results = results[:target_top_k]
         else:
-            final_results = results[:target_top_k]
+            final_results = results
 
         # 结果处理：序列化
         serialized_results = []
@@ -200,21 +182,41 @@ class Retriever(Agent):
             
         self._save_to_memory(context, task, serialized_results)
         
-        return f"Retrieved {len(serialized_results)} items."
+        return f"Retrieved {len(serialized_results)} items (Reranked)."
 
-    # 修复 Bug 2: 明确参数类型，增加 override_top_k
-    def _execute_search(self, params: RetrieverAnalyseResult, override_top_k: Optional[int] = None) -> List[Any]:
+    def _analyze_request(self, request: str) -> RetrieverAnalyseResult:
+        """
+        使用 LLM 分析自然语言请求，生成 utils.query.query 所需的参数。
+        """
+        system_prompt = self._build_system_prompt()
+
+        response = self.openai_client.responses.parse(
+            model=self.model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request},
+            ],
+            text_format=RetrieverAnalyseResult,
+        )
+
+        parsed: RetrieverAnalyseResult = response.output_parsed
+
+        return parsed
+
+    def _execute_search(self, params: Dict[str, Any]) -> List[Any]:
         """
         调用 utils.query.query 执行实际查询
         """
         collection = params.collection
         query_text = params.query_text
+
+        self.logger.debug(f"Query text: {query_text}")
+
+        top_k = params.top_k
+        filters = params.filters.model_dump() if params.filters else {}
         
-        # 使用 override 的 top_k (用于召回阶段)，否则用 params 里的
-        top_k = override_top_k if override_top_k is not None else params.top_k
-        
-        filters = params.filters.model_dump(exclude_none=True) if params.filters else {}
-        
+        # 将 filters 字典展开作为参数传递给 query 函数
+        # 注意：utils.query.query 的参数名与 filters 中的 key 需要对应
         return query(
             qdrant_client=self.qdrant_client,
             openai_client=self.openai_client,
@@ -259,20 +261,11 @@ IMPORTANT RULES FOR NAMES:
   - "Kagamine Len" / "镜音连" -> "鏡音レン"
   - "Luo Tianyi" / "洛天依" -> "洛天依" (Chinese vocaloids usually keep Chinese names)
 
-Advanced Search Options:
-- use_rerank (bool): Set to true for complex semantic queries where high accuracy is needed.
-- prefilt_key (str): Use this to prioritize results based on metadata BEFORE semantic matching.
-  - Options: "year", "month", "rating", "favorite", "length".
-  - Use "rating" or "favorite" if the user asks for "popular", "famous", "best" songs.
-  - Use "year" or "month" if the user asks for "recent" or "new" songs (combined with year_min).
-
 Output JSON Schema:
 {
   "collection": "vocadb_songs" | "vocadb_chunks",
   "query_text": "string" | null, (The semantic search query. This matches against LYRICS. Do not use abstract queries like "similar to X". Use specific imagery, themes, or words.),
   "top_k": int, (Default 10),
-  "use_rerank": bool,
-  "prefilt_key": "rating" | "favorite" | "year" | "month" | "length" | null,
   "filters": {
     "producers_any": [],
     "vsingers_any": [],
@@ -286,20 +279,20 @@ Example 1: "Find happy songs by PinocchioP"
   "collection": "vocadb_songs",
   "query_text": "happy cheerful positive lyrics",
   "top_k": 5,
-  "use_rerank": false,
-  "prefilt_key": null,
   "filters": {
     "producers_any": ["ピノキオピー"]
   }
 }
 
-Example 2: "Find the most popular songs about heartbreak"
+Example 2: "Songs by Miku published in 2023"
 {
   "collection": "vocadb_songs",
-  "query_text": "heartbreak sadness breakup tears",
+  "query_text": null,
   "top_k": 10,
-  "use_rerank": true,
-  "prefilt_key": "favorite",
-  "filters": {}
+  "filters": {
+    "vsingers_any": ["初音ミク"],
+    "year_min": 2023,
+    "year_max": 2023
+  }
 }
 """

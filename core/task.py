@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Union, Any, Optional, List, Literal
+from pathlib import Path
 from pydantic import BaseModel, Field
 import uuid
 
@@ -8,49 +9,45 @@ class RetrieverInput(BaseModel):
     """Retriever 所需的输入参数模型。"""
 
     assigned_agent: Literal["Retriever"] = "Retriever"
-    request: str = Field(..., description="用户的自然语言检索请求。")
+    request: str = Field(..., description="Request description for retrieving songs.")
 
 class ParserInput(BaseModel):
     """Parser 所需的输入参数模型。"""
 
     assigned_agent: Literal["Parser"] = "Parser"
-    file_path: str
+    file_path: Path = Field(..., description="Path to the MIDI file to be parsed.")
 
 class AnalystInput(BaseModel):
     """Analyst 所需的输入参数模型。"""
 
     assigned_agent: Literal["Analyst"] = "Analyst"
-    source_key: Optional[str] = None
-    source: Optional[str] = None
-    retrieved_properties: Optional[List[Literal[
-        "defaultName", "year", "producerNames",
-        "vsingerNames", "tagNames", "lyrics",
-        "ratingScore", "favoritedTimes", "lengthSeconds"
-    ]]] = None
+    source_keys: Optional[List[str]] = Field(None, description="List of context keys to analyze, need at least source_keys or source.")
+    source: Optional[str] = Field(None, description="Direct text content from planner to be analyzed, need at least source_keys or source.")
 
 class LyricistInput(BaseModel):
     """Lyricist 所需的输入参数模型。"""
 
     assigned_agent: Literal["Lyricist"] = "Lyricist"
-    style: Optional[str] = None
-    theme: Optional[str] = None
-    midi_key: Optional[str] = None
-    source_key: Optional[str] = None
-    source: Optional[str] = None
+    goal: str = Field(..., description="The goal or objective for the lyricist agent.")
+    style: Optional[str] = Field(None, description="Desired style for the lyrics (e.g., romantic, dark, abstract).")
+    theme: Optional[str] = Field(None, description="Desired theme for the lyrics (e.g., love, loss, hope).")
+    midi_key: Optional[str] = Field(None, description="Context key for MIDI structure to guide lyric writing.")
+    source_keys: Optional[List[str]] = Field(None, description="List of context keys for source content to inspire lyric writing.")
+    source: Optional[str] = Field(None, description="Direct text content from planner to inspire lyric writing.")
 
 class WriterInput(BaseModel):
     """Writer 所需的输入参数模型。"""
 
     assigned_agent: Literal["Writer"] = "Writer"
-    topic: str
-    source_key: Optional[str] = None
-    source: Optional[str] = None
+    goal: str = Field(..., description="The goal or objective for the writer agent.")
+    source_keys: Optional[List[str]] = Field(None, description="List of context keys to be used by the writer.")
+    source: Optional[str] = Field(None, description="Direct text content from planner to be used by the writer.")
 
 class GeneralInput(BaseModel):
     """General Agent 所需的输入参数模型。"""
 
     assigned_agent: Literal["General"] = "General"
-    query: str
+    query: str = Field(..., description="General query for the agent to process.")
 
 class TaskStatus(Enum):
     """

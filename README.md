@@ -1,4 +1,5 @@
 # VocaLyrics
+
 An agent that ignites your imagination and guides you through the creation of VOCALOID lyrics.
 
 ## 🔧 Setup
@@ -16,13 +17,16 @@ In this case, you need to crawl and build the database yourself:
 
 ```bash
 # set up Qdrant with Docker
-cd docker
-docker compose up -d
+cd docker && docker compose up -d && cd ..
 
 # crawl and build the database
 python -m tools.crawl_vocadb_data --output_dir /path/to/json
 python -m tools.build_database --json_dir /path/to/json --song_level --chunk_level
+```
 
+There are also some tools for data analysis and maintenance:
+
+```bash
 # analyze stats
 python -m tools.analyze_stats
 
@@ -40,6 +44,7 @@ python -m tools.update_payload
 | `OPENAI_API_BASE_URL` | OpenAI API base url for third-party services |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `OPENAI_API_MODEL` | OpenAI API model |
+| `COHERE_API_KEY` | Cohere API key |
 | `QDRANT_URL` | Qdrant instance address |
 | `QDRANT__SERVICE__API_KEY` | Required if authentication is enabled |
 
@@ -58,3 +63,12 @@ Or start an interactive session:
 ```bash
 python main.py
 ```
+
+## 🖥️ WebUI
+
+Still under development...
+We will release a WebUI on [VocaLyrics](https://vocalyrics.starydy.xyz) for convenient query and chat.
+
+## 📚 Acknowledgements
+
+We really appreciate [VocaDB](https://vocadb.net/) for providing a rich database of VOCALOID songs and metadata, which is fundamental to the functionality of VocaLyrics.

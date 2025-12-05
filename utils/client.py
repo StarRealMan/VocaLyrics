@@ -1,8 +1,9 @@
 import os
 import logging
 from pathlib import Path
-from openai import OpenAI
 from dotenv import load_dotenv
+from openai import OpenAI
+import cohere
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from qdrant_client.models import Distance, VectorParams
@@ -34,6 +35,13 @@ def init_openai_client() -> OpenAI:
         api_key=api_key,
         base_url=base_url
     )
+
+def init_cohere_client():
+    load_dotenv()
+    cohere_api_key = os.getenv("COHERE_API_KEY")
+    if not cohere_api_key:
+        raise RuntimeError("环境变量 COHERE_API_KEY 未设置。")
+    return cohere.Client(cohere_api_key)
 
 def init_qdrant_client_and_collections(
         embedding_dim: int,

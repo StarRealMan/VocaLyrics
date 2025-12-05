@@ -18,8 +18,8 @@ class PlannedTask(BaseModel):
         LyricistInput,
         WriterInput,
         GeneralInput
-    ] = Field(..., description="Structured input parameters for the task. Select the assigned agent with the corresponding input.")
-    output_key: Optional[str] = Field(..., description="Key under which the task result should be stored in the shared context.")
+    ] = Field(..., description="Structured input parameters for the task, corresponding to the assigned agent.")
+    output_key: Optional[str] = Field(None, description="Key under which the task result should be stored in the shared context. None if being the final task.")
 
 class PlannerResult(BaseModel):
     """Planner LLM 的整体输出结构。"""
@@ -67,9 +67,9 @@ class Planner(Agent):
         if context.shared_memory:
             memory_context_str += "Available Shared Memory (Key: Description):"
             for key in context.shared_memory:
-                desc = context.key_descriptions.get(key, "Unknown data")
+                desc = context.key_descriptions.get(key, "No description.")
                 memory_context_str += f"\n - {key}: {desc}"
-            memory_context_str += "\n(You can use these keys as 'input_params' for agents to reuse existing data without searching again.)"
+            memory_context_str += "\n(You can use these keys as 'input_params' for agents to reuse existing data.)"
 
         # 添加当前 Query 和 Context 提示
         current_query_content = f"User Query: {user_query}\n\n{memory_context_str}"

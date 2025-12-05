@@ -9,7 +9,7 @@ from agents.parser import Parser
 from agents.lyricist import Lyricist
 from agents.general import GeneralAgent
 from utils.logger import setup_logger
-from utils.client import init_openai_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
+from utils.client import init_openai_client, init_cohere_client, init_qdrant_client_and_collections, SONG_COLLECTION_NAME, CHUNK_COLLECTION_NAME
 
 
 def main():
@@ -22,6 +22,7 @@ def main():
 
     setup_logger(verbose=args.verbose)
     openai_client = init_openai_client()
+    cohere_client = init_cohere_client()
     qdrant_client = init_qdrant_client_and_collections(
             embedding_dim=1536,
             song_collection_name=SONG_COLLECTION_NAME,
@@ -29,7 +30,7 @@ def main():
         )
     
     planner = Planner(openai_client)
-    retriever = Retriever(openai_client, qdrant_client)
+    retriever = Retriever(openai_client, cohere_client, qdrant_client)
     parser_agent = Parser()
     analyst = Analyst(openai_client)
     lyricist = Lyricist(openai_client)

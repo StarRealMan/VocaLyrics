@@ -1,7 +1,9 @@
-tqdm
 openai
+cohere
 qdrant-client
+pydantic
+mido
+tqdm
 requests
 python-dotenv
-mido
-pydantic
+mathplotlib

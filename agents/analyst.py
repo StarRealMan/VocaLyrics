@@ -8,6 +8,12 @@ from core.task import Task
 from agents.base import Agent
 
 
+class KeyExcerpt(BaseModel):
+    """引用结果模型，用于表示分析过程中引用的内容。"""
+
+    source: str = Field(..., description="The source of the referenced content (e.g., song title or URL).")
+    excerpt: str = Field(..., description="A brief excerpt from the referenced content.")
+
 class AnalysisResult(BaseModel):
     summary: str = Field(..., description="A concise summary of the analysis.")
     themes: List[str] = Field(..., description="Key themes identified in the lyrics.")
@@ -35,37 +41,16 @@ class Analyst(Agent):
         执行分析任务
         """
         params = task.input_params
-        retrieved_properties = params.retrieved_properties
-        source_key = params.source_key
+        source_keys = params.source_keys
         source = params.source
 
-        source_content = ""
-        
-        # 1. 获取待分析内容
-        if source_key:
-            data = context.get_memory(source_key)
-            if data:
-                if retrieved_properties:
-                    source_content += "Source from retriever"
-                    for idx, item in enumerate(data):
-                        source_content += f"\n\n--- Item {idx + 1} ---"
-                        for key in retrieved_properties:
-                            value = item["payload"].get(key)
-                            if value:
-                                source_content += f"\n{key.upper()}:\n{str(value)}"
-                else:
-                    source_content += f"Source from ({source_key}):\n{str(data)}"
-            else:
-                raise ValueError(f"Source key '{source_key}' not found in shared memory.")
+        source_content = self._format_memory_content(context, source_keys)
         
         if source:
             source_content += f"\nSource provided by planner:\n{source}"
         
         if not source_content:
-            raise ValueError(f"Analyst requires either 'retrieved_key', 'source_key' or 'source' parameter.")
-
-        if not source_content.strip():
-             return "No content to analyze."
+            raise ValueError(f"Analyst requires either 'source_keys' or 'source' parameter.")
 
         # 2. 调用 LLM 进行分析
         self.logger.debug(f"Analyzing content (length: {len(source_content)})...")

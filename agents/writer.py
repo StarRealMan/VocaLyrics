@@ -26,24 +26,17 @@ class Writer(Agent):
         执行写作任务
         """
         params = task.input_params
-        topic = params.topic
-        source_key = params.source_key
+        topic = params.goal
+        
+        source_keys = params.source_keys
         source = params.source
         
-        source_content = ""
-        if source_key:
-            data = context.get_memory(source_key)
-            if data:
-                source_content += f"Source from ({source_key}):\n{str(data)}"
-            else:
-                raise ValueError(f"Source key '{source_key}' not found in shared memory.")
+        # 使用基类的智能格式化处理 source_keys
+        source_content = self._format_memory_content(context, source_keys)
         
-        # 如果没有指定 source_key input_params 直接获取 source
+        # 如果没有指定 source_keys，尝试从 input_params 直接获取 source
         if source:
             source_content += f"\nSource provided by planner:\n{source}"
-        
-        if not source_content:
-            raise ValueError("Writer requires either 'source_key' or 'source' parameter.")
 
         system_prompt = self._build_system_prompt()
 
@@ -59,7 +52,7 @@ class Writer(Agent):
             ]
         )
         
-        result = response.output_text
+        result = response.output.choices[0].message.content
         
         # 保存结果
         self._save_to_memory(context, task, result)
