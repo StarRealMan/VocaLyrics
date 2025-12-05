@@ -1,6 +1,6 @@
 # VocaLyrics
 
-An agent that ignites your imagination and guides you through the creation of VOCALOID lyrics.
+A multi-agent system that ignites your imagination and guides you through the creation of VOCALOID lyrics.
 
 ## 🔧 Setup
 
@@ -63,12 +63,3 @@ Or start an interactive session:
 ```bash
 python main.py
 ```
-
-## 🖥️ WebUI
-
-Still under development...
-We will release a WebUI on [VocaLyrics](https://vocalyrics.starydy.xyz) for convenient query and chat.
-
-## 📚 Acknowledgements
-
-We really appreciate [VocaDB](https://vocadb.net/) for providing a rich database of VOCALOID songs and metadata, which is fundamental to the functionality of VocaLyrics.
