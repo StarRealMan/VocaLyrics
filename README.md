@@ -2,6 +2,8 @@
 
 A multi-agent system that ignites your imagination and guides you through the creation of VOCALOID lyrics.
 
+![](assets/pipeline.png)
+
 ## 🔧 Setup
 
 ```bash
